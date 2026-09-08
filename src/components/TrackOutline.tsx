@@ -47,8 +47,8 @@ export function TrackOutline({ track, meters, title, subtitle }: { track: Track;
           <dd>{(track.lengthMeters / 1000).toFixed(3).replace(".", ",")} km</dd>
         </div>
         <div>
-          <dt>{track.totalClimb > 30 ? "Dislivello" : "Curve"}</dt>
-          <dd>{track.totalClimb > 30 ? `${Math.round(track.totalClimb)} m` : countCorners(track)}</dd>
+          <dt>{track.totalClimb > 150 ? "Dislivello" : "Curve"}</dt>
+          <dd>{track.totalClimb > 150 ? `${Math.round(track.totalClimb)} m` : countCorners(track)}</dd>
         </div>
       </dl>
     </div>

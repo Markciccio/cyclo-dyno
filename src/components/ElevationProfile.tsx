@@ -12,18 +12,25 @@ export function ElevationProfile({ track, meters }: { track: Track; meters: numb
     const span = Math.max(1, track.maxElevation - low)
     const toY = (elevation: number) => 100 - ((elevation - low) / span) * 82 - 6
     const toX = (s: number) => (s / track.lengthMeters) * 100
-    return track.points.slice(0, -1).map((point, index) => {
-      const next = track.points[index + 1]
-      return {
+    // Con un vertice ogni 5 m le bande diventerebbero un codice a barre: si aggregano.
+    const target = 120
+    const group = Math.max(1, Math.ceil((track.points.length - 1) / target))
+    const bands = []
+    for (let i = 0; i < track.points.length - 1; i += group) {
+      const point = track.points[i]
+      const next = track.points[Math.min(track.points.length - 1, i + group)]
+      bands.push({
         d: `M${toX(point.s)} 100L${toX(point.s)} ${toY(point.elevation)}L${toX(next.s)} ${toY(next.elevation)}L${toX(next.s)} 100Z`,
-        tone: gradeTone(point.grade),
-      }
-    })
+        // Pendenza già filtrata sui 100 m: riderivarla qui rifarebbe le strisce.
+        tone: gradeTone((point.grade + next.grade) / 2),
+      })
+    }
+    return bands
   }, [track])
 
   const here = sampleTrack(track, meters)
   const x = (normaliseDistance(track, meters) / track.lengthMeters) * 100
-  const flat = track.maxElevation - track.minElevation < 30
+  const flat = track.maxElevation - track.minElevation < 150
 
   return (
     <div className="elevation-profile">

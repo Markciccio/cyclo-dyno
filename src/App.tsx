@@ -4,6 +4,7 @@ import type {
   DataSource,
   DynoSession,
   PowerDataProvider,
+  GhostChoice,
   SessionSample,
   Settings,
   VehicleProfile,
@@ -19,7 +20,8 @@ import { PowerChart } from "./components/PowerChart";
 import { TrackMap } from "./components/TrackMap";
 import { ElevationProfile } from "./components/ElevationProfile";
 import { VehicleIcon } from "./components/VehicleIcon";
-import { challenges, challengeTrack, defaultRival, totalMassKg, vehicles } from "./logic/challenges";
+import { challenges, challengeTrack, totalMassKg, vehicles } from "./logic/challenges";
+import { bestOnTrack, ghostLabel, isVehicleGhost, recordMetersAt } from "./logic/ghost";
 const defaults: Settings = {
   eventName: "HPV POWER CHALLENGE",
   defaultDuration: 60,
@@ -74,7 +76,7 @@ export function App() {
     [riderWeight, setRiderWeight] = useState(""),
     [vehicle, setVehicle] = useState<VehicleProfile>("velomobile"),
     [challenge, setChallenge] = useState<ChallengeId>("dyno"),
-    [rival, setRival] = useState<VehicleProfile>(defaultRival("velomobile")),
+    [ghost, setGhost] = useState<GhostChoice>("none"),
     [rivalMeters, setRivalMeters] = useState(0);
   const pRef = useRef(provider),
     sRef = useRef<SessionSample[]>([]),
@@ -87,7 +89,7 @@ export function App() {
     lastPowerPaint = useRef(0),
     lastSpeedPaint = useRef(0),
     lastSamplePaint = useRef(0),
-    rivalRef = useRef<VehicleProfile>(defaultRival("velomobile")),
+    ghostRef = useRef<GhostChoice>("none"),
     rivalSpeedRef = useRef(0),
     rivalMetersRef = useRef(0),
     wakeLockRef = useRef<ScreenLock>(),
@@ -133,12 +135,18 @@ export function App() {
   function selectVehicle(next: VehicleProfile) {
     vehicleRef.current = next;
     setVehicle(next);
-    // Cambiando mezzo lo sfidante proposto cambia con lui, se non è stato scelto a mano.
-    if (rivalRef.current === next) selectRival(defaultRival(next));
   }
-  function selectRival(next: VehicleProfile) {
-    rivalRef.current = next;
-    setRival(next);
+  function selectGhost(next: GhostChoice) {
+    // Scegliendolo a prova iniziata parte da dove sei: un distacco accumulato
+    // mentre il ghost non esisteva non significherebbe nulla.
+    if (ghostRef.current === "none" && next !== "none") {
+      const current = sRef.current.at(-1);
+      rivalMetersRef.current = (current?.distanceKm ?? 0) * 1000;
+      rivalSpeedRef.current = current?.virtualSpeedKmh ?? 0;
+      setRivalMeters(rivalMetersRef.current);
+    }
+    ghostRef.current = next;
+    setGhost(next);
   }
   async function requestWakeLock() {
     const api = (navigator as Navigator & { wakeLock?: { request: (type: "screen") => Promise<ScreenLock> } }).wakeLock;
@@ -241,16 +249,16 @@ export function App() {
             elevationMeters: point?.elevation,
           };
         sRef.current.push(y);
-        if (track && dt > 0) {
+        if (track && dt > 0 && isVehicleGhost(ghostRef.current)) {
           // Lo sfidante riceve gli stessi watt e li spende con la sua fisica.
-          const rivalSpec = vehicles[rivalRef.current];
+          const rivalSpec = vehicles[ghostRef.current];
           const before = rivalSpeedRef.current;
           rivalSpeedRef.current = advanceVirtualSpeed({
             powerWatts: x.powerWatts,
             previousKmh: before,
             dtSeconds: dt / 1000,
             grade: sampleTrack(track, rivalMetersRef.current).grade,
-            totalKg: totalMassKg(riderWeightRef.current, rivalRef.current),
+            totalKg: totalMassKg(riderWeightRef.current, ghostRef.current),
             physics: rivalSpec,
             speedLimitKmh: cornerLimitKmh(track, rivalMetersRef.current, rivalSpec.lateralG),
           });
@@ -353,6 +361,15 @@ export function App() {
     const metersDone = (live?.distanceKm ?? 0) * 1000;
     const liveTrack = challengeTrack(challenge);
     const gradePercent = live?.gradePercent ?? 0;
+    const record = bestOnTrack(sessions, challenge);
+    const ghostMeters =
+      ghost === "none"
+        ? undefined
+        : ghost === "best"
+          ? record
+            ? recordMetersAt(record, clock)
+            : undefined
+          : rivalMeters;
     return (
       <main className="dyno">
         <header>
@@ -367,12 +384,14 @@ export function App() {
         <TrackMap
           challenge={challenge}
           meters={metersDone}
-          elapsedSeconds={clock}
           vehicle={vehicle}
           onVehicleChange={selectVehicle}
-          rival={rival}
-          rivalMeters={rivalMeters}
-          onRivalChange={selectRival}
+          ghost={ghost}
+          ghostMeters={ghostMeters}
+          ghostVehicle={ghost === "best" ? (record?.vehicle ?? "velomobile") : ghost === "none" ? vehicle : ghost}
+          ghostName={ghostLabel(ghost, record)}
+          bestLabel={record ? `${record.participantName} · ${formatLapTime(record.elapsedSeconds ?? 0)}` : undefined}
+          onGhostChange={selectGhost}
           running
         />
         {challenge === "dyno" && <VehicleControls vehicle={vehicle} onChange={selectVehicle} />}
@@ -412,7 +431,7 @@ export function App() {
               fill={metersDone / liveTrack.lengthMeters}
               tone="distance"
             />
-            {liveTrack.totalClimb > 30 && (
+            {liveTrack.totalClimb > 150 && (
               <Bar
                 n="DISLIVELLO"
                 v={`${Math.round(sampleTrack(liveTrack, metersDone).climb)}`}
@@ -689,19 +708,21 @@ export function App() {
         <p className={isA && provider.connected ? "connected" : "disconnected"}>
           ● {provider.status()}
         </p>
-        <label className="field">
-          NOME PARTECIPANTE <small>facoltativo</small>
-          <input
-            autoFocus
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="Nome o nickname"
-          />
-        </label>
-        <label className="field">
-          PESO ATLETA <small>facoltativo · predefinito 70 kg</small>
-          <input value={riderWeight} onChange={(e) => setRiderWeight(e.target.value)} inputMode="decimal" placeholder="70" aria-label="Peso atleta in kg" />
-        </label>
+        <div className="field-row">
+          <label className="field">
+            NOME <small>facoltativo</small>
+            <input
+              autoFocus
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Nickname"
+            />
+          </label>
+          <label className="field">
+            PESO <small>kg · default 70</small>
+            <input value={riderWeight} onChange={(e) => setRiderWeight(e.target.value)} inputMode="decimal" placeholder="70" aria-label="Peso atleta in kg" />
+          </label>
+        </div>
         <fieldset>
           <legend>MODALITÀ SFIDA</legend>
           <div className="selector">

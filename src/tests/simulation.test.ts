@@ -1,9 +1,10 @@
 import { describe, expect, it } from "vitest"
 import { advanceVirtualSpeed, powerForSpeed, steadyStateKmh } from "../logic/speed"
 import { cornerLimitKmh, getTrack, sampleTrack } from "../logic/tracks"
-import { challenges, defaultRival, monzaGhost, totalMassKg, vehicles } from "../logic/challenges"
+import { challenges, monzaGhost, totalMassKg, vehicles } from "../logic/challenges"
 import { rankFor } from "../logic/metrics"
 import type { DynoSession } from "../types"
+import { bestOnTrack, ghostLabel, isVehicleGhost, recordMetersAt } from "../logic/ghost"
 
 const rider = 70
 const mass = (id: keyof typeof vehicles) => totalMassKg(rider, id)
@@ -209,14 +210,6 @@ describe("classifica per sfida", () => {
 })
 
 describe("sfidante a pari watt", () => {
-  it("propone sempre un mezzo di un altro mondo, mai lo stesso", () => {
-    for (const id of Object.keys(vehicles) as (keyof typeof vehicles)[]) {
-      expect(defaultRival(id)).not.toBe(id)
-    }
-    expect(defaultRival("velomobile")).toBe("road")
-    expect(defaultRival("road")).toBe("velomobile")
-  })
-
   it("con gli stessi watt distanzia il mezzo meno efficiente", () => {
     const monza = getTrack("monza")
     const run = (id: keyof typeof vehicles) => {
@@ -238,5 +231,45 @@ describe("sfidante a pari watt", () => {
     }
     // Cinque minuti a 250 W: il divario deve essere visibile, non simbolico.
     expect(run("velomobile") - run("road")).toBeGreaterThan(500)
+  })
+})
+
+describe("scelta del ghost", () => {
+  const sample = (elapsedMs: number, distanceKm: number) => ({ timestamp: elapsedMs, elapsedMs, distanceKm, powerWatts: 250, virtualSpeedKmh: 40 })
+  const record = {
+    id: "r", participantName: "PB", challenge: "monza" as const, completed: true, elapsedSeconds: 400,
+    samples: [sample(0, 0), sample(100000, 2), sample(400000, 5.794)],
+  } as unknown as DynoSession
+
+  it("distingue i ghost a pari watt dalle altre scelte", () => {
+    expect(isVehicleGhost("none")).toBe(false)
+    expect(isVehicleGhost("best")).toBe(false)
+    expect(isVehicleGhost("velomobile")).toBe(true)
+  })
+
+  it("rigioca il record interpolando fra i campioni", () => {
+    expect(recordMetersAt(record, 0)).toBe(0)
+    expect(recordMetersAt(record, 50)).toBeCloseTo(1000, 0)
+    expect(recordMetersAt(record, 100)).toBeCloseTo(2000, 0)
+    // A metà fra 100 s e 400 s si è a metà fra 2 km e 5,794 km.
+    expect(recordMetersAt(record, 250)).toBeCloseTo(3897, 0)
+  })
+
+  it("non va oltre l'arrivo né prima della partenza", () => {
+    expect(recordMetersAt(record, -10)).toBe(0)
+    expect(recordMetersAt(record, 9999)).toBeCloseTo(5794, 0)
+  })
+
+  it("prende come record solo prove completate sullo stesso tracciato", () => {
+    const dnf = { ...record, id: "d", completed: false, elapsedSeconds: 10 } as DynoSession
+    const other = { ...record, id: "o", challenge: "mottarone" as const, elapsedSeconds: 5 } as DynoSession
+    expect(bestOnTrack([dnf, other, record], "monza")?.id).toBe("r")
+    expect(bestOnTrack([dnf], "monza")).toBeUndefined()
+  })
+
+  it("etichetta il ghost secondo la scelta", () => {
+    expect(ghostLabel("none")).toBe("")
+    expect(ghostLabel("road")).toContain("STESSI WATT")
+    expect(ghostLabel("best", record)).toContain("PB")
   })
 })

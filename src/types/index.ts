@@ -1,6 +1,8 @@
 export type DataSource = 'demo' | 'assioma'
 export type VehicleProfile = 'road' | 'trike' | 'recumbent' | 'velomobile'
 export type ChallengeId = 'dyno' | 'monza' | 'velodrome' | 'mottarone'
+/** Chi corre accanto a te: nessuno, un mezzo mosso dai tuoi stessi watt, o il record sul tracciato. */
+export type GhostChoice = 'none' | VehicleProfile | 'best'
 export interface PowerSample { timestamp: number; powerWatts: number; cadenceRpm?: number }
 export interface SessionSample extends PowerSample { elapsedMs: number; virtualSpeedKmh: number; distanceKm?: number; gradePercent?: number; elevationMeters?: number }
 export interface Metrics { peakPower:number; best1s:number|null; best5s:number|null; best10s:number|null; averagePower:number; maxVirtualSpeed:number; averageCadence:number|null; maxCadence:number|null; powerDrop:number|null; thresholdTimes:Record<number,number> }

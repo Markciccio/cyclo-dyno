@@ -1,8 +1,9 @@
 import { useEffect, useRef } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
-import type { ChallengeId, VehicleProfile } from "../types";
-import { monzaGhost, sectorName, vehicles } from "../logic/challenges";
+import type { ChallengeId, GhostChoice, VehicleProfile } from "../types";
+import { sectorName, vehicles } from "../logic/challenges";
+import { GhostMenu } from "./GhostMenu";
 import { getTrack, hasTrack, sampleTrack } from "../logic/tracks";
 import { VehicleIcon, vehicleTopDownSvg } from "./VehicleIcon";
 import { TrackOutline } from "./TrackOutline";
@@ -18,38 +19,37 @@ const followZoom: Record<string, number> = { monza: 17, velodrome: 18, mottarone
 export function TrackMap({
   challenge,
   meters,
-  elapsedSeconds,
   vehicle,
   onVehicleChange,
-  rival,
-  rivalMeters,
-  onRivalChange,
+  ghost,
+  ghostMeters,
+  ghostVehicle,
+  ghostName,
+  bestLabel,
+  onGhostChange,
   running,
 }: {
   challenge: ChallengeId;
   /** Distanza percorsa in metri: è ciò che posiziona il mezzo sul tracciato. */
   meters: number;
-  elapsedSeconds: number;
   vehicle: VehicleProfile;
   onVehicleChange: (vehicle: VehicleProfile) => void;
-  /** Mezzo di confronto mosso dagli stessi watt del pilota. */
-  rival: VehicleProfile;
-  rivalMeters: number;
-  onRivalChange: (vehicle: VehicleProfile) => void;
+  /** Chi corre accanto: nessuno finché non lo si sceglie dal menù. */
+  ghost: GhostChoice;
+  /** Distanza del ghost in metri, assente se non ce n'è uno. */
+  ghostMeters?: number;
+  ghostVehicle: VehicleProfile;
+  ghostName: string;
+  bestLabel?: string;
+  onGhostChange: (choice: GhostChoice) => void;
   running: boolean;
 }) {
   const holder = useRef<HTMLDivElement>(null),
     map = useRef<L.Map>(),
     marker = useRef<L.Marker>(),
-    rivalMarker = useRef<L.Marker>(),
-    ghost = useRef<L.Marker>();
+    ghostMarker = useRef<L.Marker>();
   const track = hasTrack(challenge) ? getTrack(challenge) : undefined;
-  const isMonza = challenge === "monza";
   const here = track ? sampleTrack(track, meters) : undefined;
-
-  const ghostMeters = isMonza && track ? (elapsedSeconds / monzaGhost.timeSeconds) * track.lengthMeters : 0;
-  const delta = isMonza && track ? elapsedSeconds - (meters / track.lengthMeters) * monzaGhost.timeSeconds : 0;
-  const deltaLabel = delta <= 0 ? `${Math.abs(delta).toFixed(1)} s DAVANTI` : `${delta.toFixed(1)} s DIETRO`;
 
   useEffect(() => {
     if (!holder.current || !track) return;
@@ -76,15 +76,14 @@ export function TrackMap({
     })
       .addTo(instance)
       .bindTooltip(track.closed ? "TRAGUARDO" : "PARTENZA", { permanent: false });
-    L.control.zoom({ position: "bottomleft" }).addTo(instance);
+    L.control.zoom({ position: "topleft" }).addTo(instance);
     instance.fitBounds(L.latLngBounds(line), { padding: [24, 24] });
     map.current = instance;
     return () => {
       instance.remove();
       map.current = undefined;
       marker.current = undefined;
-      rivalMarker.current = undefined;
-      ghost.current = undefined;
+      ghostMarker.current = undefined;
     };
   }, [track]);
 
@@ -99,34 +98,17 @@ export function TrackMap({
   }, [vehicle, track]);
 
   useEffect(() => {
-    if (!map.current || !track) return;
-    rivalMarker.current?.remove();
-    rivalMarker.current = L.marker([track.points[0].lat, track.points[0].lon], {
+    if (!map.current || !track || ghost === "none") return;
+    ghostMarker.current?.remove();
+    ghostMarker.current = L.marker([track.points[0].lat, track.points[0].lon], {
       zIndexOffset: 400,
-      icon: L.divIcon({ className: "rival-marker", html: vehicleTopDownSvg(rival), iconSize: [40, 44], iconAnchor: [20, 22] }),
-    }).addTo(map.current);
-  }, [rival, track]);
-
-  useEffect(() => {
-    if (!rivalMarker.current || !track) return;
-    const point = sampleTrack(track, rivalMeters);
-    rivalMarker.current.setLatLng([point.lat, point.lon]);
-    const svg = rivalMarker.current.getElement()?.firstElementChild as HTMLElement | undefined;
-    if (svg) svg.style.transform = `rotate(${point.bearing}deg)`;
-  }, [rivalMeters, track]);
-
-  useEffect(() => {
-    if (!map.current || !track || !isMonza) return;
-    ghost.current?.remove();
-    ghost.current = L.marker([track.points[0].lat, track.points[0].lon], {
-      zIndexOffset: 300,
-      icon: L.divIcon({ className: "ghost-marker", html: vehicleTopDownSvg(monzaGhost.vehicle), iconSize: [40, 44], iconAnchor: [20, 22] }),
+      icon: L.divIcon({ className: `ghost-marker ${ghost === "best" ? "record" : "rival"}`, html: vehicleTopDownSvg(ghostVehicle), iconSize: [40, 44], iconAnchor: [20, 22] }),
     }).addTo(map.current);
     return () => {
-      ghost.current?.remove();
-      ghost.current = undefined;
+      ghostMarker.current?.remove();
+      ghostMarker.current = undefined;
     };
-  }, [track, isMonza]);
+  }, [ghost, ghostVehicle, track]);
 
   // Aggiornamento della posizione a ogni campione: sposta e ruota, non ridisegna.
   useEffect(() => {
@@ -138,10 +120,10 @@ export function TrackMap({
   }, [here?.lat, here?.lon, here?.bearing, running, track]);
 
   useEffect(() => {
-    if (!ghost.current || !track) return;
+    if (!ghostMarker.current || !track || ghostMeters === undefined) return;
     const point = sampleTrack(track, ghostMeters);
-    ghost.current.setLatLng([point.lat, point.lon]);
-    const svg = ghost.current.getElement()?.firstElementChild as HTMLElement | undefined;
+    ghostMarker.current.setLatLng([point.lat, point.lon]);
+    const svg = ghostMarker.current.getElement()?.firstElementChild as HTMLElement | undefined;
     if (svg) svg.style.transform = `rotate(${point.bearing}deg)`;
   }, [ghostMeters, track]);
 
@@ -157,7 +139,7 @@ export function TrackMap({
   if (!track) return null;
   const progress = track.closed ? (meters % track.lengthMeters) / track.lengthMeters : meters / track.lengthMeters;
   const sector = sectorName(challenge, meters % track.lengthMeters);
-  const gap = meters - rivalMeters;
+  const gap = ghostMeters === undefined ? undefined : meters - ghostMeters;
 
   return (
     <section className="satellite-track">
@@ -178,26 +160,17 @@ export function TrackMap({
           <span>N</span>
         </div>
         {sector && <div className="sector-flag">{sector}</div>}
-        <div className={`rival-panel ${gap >= 0 ? "ahead" : "behind"}`}>
-          <span>◑ STESSI WATT · {vehicles[rival].label}</span>
-          <strong>
-            {gap >= 0 ? "+" : "−"}
-            {Math.abs(gap) >= 1000 ? `${(Math.abs(gap) / 1000).toFixed(2)} km` : `${Math.abs(gap).toFixed(0)} m`}
-          </strong>
-          <small>{gap >= 0 ? "sei davanti" : "sei dietro"}</small>
-        </div>
-        {isMonza && (
-          <div className={`ghost-panel ${delta <= 0 ? "ahead" : "behind"}`}>
-            <span>◌ GHOST · {monzaGhost.vehicle.toUpperCase()}</span>
-            <b>
-              {monzaGhost.name} · {monzaGhost.displayTime}
-            </b>
-            <small>
-              {monzaGhost.averageKmh} km/h · {monzaGhost.averageWatts} W
-            </small>
-            <strong>{deltaLabel}</strong>
+        {gap !== undefined && (
+          <div className={`rival-panel ${gap >= 0 ? "ahead" : "behind"}`}>
+            <span>{ghostName}</span>
+            <strong>
+              {gap >= 0 ? "+" : "−"}
+              {Math.abs(gap) >= 1000 ? `${(Math.abs(gap) / 1000).toFixed(2)} km` : `${Math.abs(gap).toFixed(0)} m`}
+            </strong>
+            <small>{gap >= 0 ? "sei davanti" : "sei dietro"}</small>
           </div>
         )}
+        <GhostMenu choice={ghost} onChange={onGhostChange} bestLabel={bestLabel} vehicle={vehicle} />
       </div>
       <aside className="vehicle-switch">
         {(Object.keys(vehicles) as VehicleProfile[]).map((id) => (
@@ -212,16 +185,6 @@ export function TrackMap({
             </small>
           </button>
         ))}
-      </aside>
-      <aside className="rival-switch">
-        <label>SFIDANTE</label>
-        {(Object.keys(vehicles) as VehicleProfile[])
-          .filter((id) => id !== vehicle)
-          .map((id) => (
-            <button key={id} className={rival === id ? "active" : ""} onClick={() => onRivalChange(id)}>
-              {vehicles[id].label}
-            </button>
-          ))}
       </aside>
       <p className="satellite-note">Satellite © Esri · tracciato © OpenStreetMap · mezzo simulato: {vehicles[vehicle].label}</p>
     </section>

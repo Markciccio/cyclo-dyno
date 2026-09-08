@@ -44,6 +44,13 @@ const rad = (deg: number) => (deg * Math.PI) / 180
  */
 const CURVATURE_WINDOW_METERS = 50
 
+/**
+ * Base di misura della pendenza. SRTM ha una decina di metri di errore verticale:
+ * derivare su 20 m produce oscillazioni fra il 4% e il 16% che non esistono sulla
+ * strada e che farebbero sobbalzare sia la simulazione sia il colore del profilo.
+ */
+const GRADE_WINDOW_METERS = 100
+
 function buildTrack(id: TrackId): Track {
   const raw = rawTracks[id]
   const [lat0, lon0] = raw.points[0]
@@ -73,6 +80,14 @@ function buildTrack(id: TrackId): Track {
     return [xs[i][0] + (xs[j][0] - xs[i][0]) * f, xs[i][1] + (xs[j][1] - xs[i][1]) * f] as const
   }
 
+  /** Quota interpolata a una distanza qualsiasi, come pointAt ma sull'altimetria. */
+  const elevationAt = (meters: number) => {
+    const exact = Math.max(0, Math.min(raw.lengthMeters, meters)) / step
+    const i = wrap(Math.floor(exact))
+    const j = wrap(i + 1)
+    return raw.elevation[i] + (raw.elevation[j] - raw.elevation[i]) * (exact - Math.floor(exact))
+  }
+
   const points: TrackPoint[] = []
   let climb = 0
   for (let i = 0; i < n; i++) {
@@ -80,8 +95,9 @@ function buildTrack(id: TrackId): Track {
     const next = wrap(i + 1)
     if (i > 0) climb += Math.max(0, raw.elevation[i] - raw.elevation[i - 1])
 
-    const span = Math.hypot(xs[next][0] - xs[prev][0], xs[next][1] - xs[prev][1])
-    const grade = span > 0.5 ? (raw.elevation[next] - raw.elevation[prev]) / span : 0
+    const back = Math.max(0, i * step - GRADE_WINDOW_METERS / 2)
+    const ahead = Math.min(raw.lengthMeters, i * step + GRADE_WINDOW_METERS / 2)
+    const grade = ahead - back > 1 ? (elevationAt(ahead) - elevationAt(back)) / (ahead - back) : 0
 
     const a = pointAt(i * step - CURVATURE_WINDOW_METERS)
     const b = xs[i]

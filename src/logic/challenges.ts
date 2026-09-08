@@ -78,7 +78,7 @@ function fromTrack(id: ChallengeId, label: string, note: string): ChallengeSpec 
   return {
     label,
     distanceKm: km,
-    elevationGain: climb > 30 ? climb : undefined,
+    elevationGain: climb > 150 ? climb : undefined,
     lap: track.closed,
     description: note,
   };

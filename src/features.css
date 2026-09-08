@@ -405,14 +405,6 @@
 .rival-panel.ahead strong { color: #48ed92; }
 .rival-panel.behind strong { color: #ff8b6e; }
 
-.rival-switch {
-  position: absolute; z-index: 500; left: 50%; bottom: 4px; transform: translateX(-50%);
-  display: flex; align-items: center; gap: .3rem;
-  padding: .2rem .35rem; background: #091016dd; border: 1px solid #35404a;
-}
-.rival-switch label { font: 9px "DM Mono"; letter-spacing: .1em; color: #8b96a3; }
-.rival-switch button { padding: .2rem .45rem; font-size: .58rem; background: #0d131a; }
-.rival-switch button.active { border-color: #29d7ff; color: #bfefff; box-shadow: 0 0 8px #29d7ff66; }
 
 /* Con lo sfidante in alto a destra, i pulsanti mezzo scendono sotto il suo pannello. */
 .vehicle-switch { top: 88px; }
@@ -421,6 +413,213 @@
   .rival-panel { right: 6px; top: 6px; padding: .25rem .4rem; }
   .rival-panel span, .rival-panel small { font-size: .48rem; }
   .rival-panel strong { font-size: 1rem; }
-  .rival-switch { display: none; }
   .vehicle-switch { top: 62px; }
+}
+
+/* ========= home compatta, misurata sul Pixel 9a (412 x 916 CSS px) ========= */
+/* Nome e peso stanno su una riga sola: due campi corti non meritano mezza pagina. */
+.field-row {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: .6rem;
+  max-width: 520px;
+  margin: 1rem 0;
+}
+.field-row .field { margin: 0; max-width: none; min-width: 0; }
+.field-row .field small { display: block; font-size: .6rem; letter-spacing: .04em; }
+
+@media (max-width: 520px) {
+  main { padding: .6rem .7rem 1rem; min-height: auto; }
+  nav { margin-bottom: .6rem; gap: .3rem; }
+  nav button { font-size: .7rem; padding: .35rem .45rem; }
+
+  .home { padding-top: .7rem; }
+  .home h1 { font-size: clamp(2.6rem, 15vw, 3.6rem); margin: .15rem 0 .35rem; }
+  .eyebrow { font-size: .62rem; }
+  .home > p { margin: .3rem 0; font-size: .8rem; }
+
+  .field-row { gap: .45rem; margin: .7rem 0; }
+  .field-row .field input { margin-top: .25rem; padding: .5rem .55rem; font-size: 1.05rem; }
+  .field-row .field small { font-size: .55rem; }
+
+  fieldset { margin: .7rem 0; }
+  /* Quattro sfide su due colonne: in colonna singola spingevano i pulsanti fuori schermo. */
+  .selector { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .4rem; margin-top: .35rem; }
+  .selector button { min-height: 0; padding: .45rem .5rem; }
+  .selector b { font-size: .82rem; }
+  .selector small { font-size: .58rem; margin-top: .1rem; line-height: 1.15; }
+
+  .home .actions { gap: .4rem; margin-top: .8rem; }
+  .home .actions button { flex: 1 1 auto; padding: .6rem .5rem; font-size: .85rem; }
+  .home .actions .primary { flex-basis: 100%; }
+}
+
+/* ========= schermata di corsa: tutto in un video, niente scroll pedalando ========= */
+@media (max-width: 520px) {
+  .dyno {
+    padding: .4rem .45rem .5rem;
+    min-height: 100svh;
+    display: flex;
+    flex-direction: column;
+    gap: .3rem;
+  }
+  .dyno header { margin: 0; }
+  .dyno header > b { font-size: 1.2rem; }
+  .live { font-size: .62rem; }
+
+  /* La mappa cede spazio ai numeri: serve a capire dove sei, non a navigare. */
+  .satellite-track { height: 290px; flex: 0 0 auto; }
+  .track-outline { width: 92px; }
+  .track-outline svg { height: 52px; }
+
+  .run-strip { margin: 0; }
+  .elevation-profile { margin: 0; height: 38px; }
+
+  .dyno .hero { margin: .2rem auto 0; gap: .3rem; }
+  .hero .power-readout { font-size: clamp(3.4rem, 19vw, 5rem); }
+  .hero .speed-readout { font-size: clamp(3.6rem, 20vw, 5.2rem); }
+  .speed-dial { width: 165px; height: 78px; bottom: 20%; }
+  .speed-dial span { height: 76px; }
+  .gauge, .speed-scale { height: 1.35rem; margin: .3rem auto; padding: .32rem; font-size: .5rem; }
+
+  .dyno .metrics { margin: 0; }
+  .dyno .metrics > div { padding: .3rem .22rem; }
+  .dyno .metrics b, .dyno .metrics > div:nth-child(3) b { font-size: .85rem; }
+
+  /* Il grafico di potenza resta nel risultato: qui ruberebbe spazio ai numeri grandi. */
+  .dyno .chart { display: none; }
+  .dyno .danger { margin-top: auto; padding: .5rem; font-size: .8rem; }
+}
+
+/* Schermi bassi (barra URL visibile): si stringe ancora la mappa. */
+@media (max-width: 520px) and (max-height: 780px) {
+  .satellite-track { height: 232px; }
+  .elevation-profile { display: none; }
+}
+
+/* ===== correzioni di sovrapposizione emerse provando a 412 x 916 ===== */
+@media (max-width: 520px) {
+  /* Il controllo zoom non serve: la mappa insegue da sola e si pizzica. */
+  .satellite-map .leaflet-control-zoom { display: none; }
+  .satellite-map .leaflet-control-attribution { font-size: 8px; padding: 0 3px; }
+
+  /* La sagoma sta in basso a sinistra, senza la tabellina che le sbordava fuori. */
+  .track-outline { width: 84px; left: 5px; bottom: 16px; padding: .25rem .3rem; }
+  .track-outline dl { display: none; }
+  .track-outline-head small { display: none; }
+  .track-outline-head b { font-size: .62rem; }
+  .track-outline svg { height: 48px; margin: 0; }
+
+  /* Settore in basso al centro: in alto finiva sotto il pannello sfidante. */
+  .sector-flag { top: auto; bottom: 16px; font-size: 8.5px; letter-spacing: .04em; }
+
+  /* Quattro pulsanti mezzo devono stare dentro l'altezza della mappa. */
+  .vehicle-switch { top: 54px; width: 32px; gap: 2px; right: 4px; }
+  .vehicle-switch button { width: 32px; height: 32px; padding: .15rem; }
+  .vehicle-switch .vehicle-icon { width: 22px; height: 14px; }
+
+  /* I badge "nuovo picco" e "watt extra" coprivano i numeri: il picco è già nelle metriche. */
+  .speed-extra i, .gauge-extra i { display: none; }
+}
+
+/* ===== secondo giro di correzioni a 412 x 916 ===== */
+@media (max-width: 520px) {
+  /* La mappa prende lo spazio che avanza invece di lasciare un vuoto sopra STOP. */
+  .satellite-track { flex: 1 1 auto; height: auto; min-height: 230px; }
+
+  /* La velocità usciva dalla colonna e veniva tagliata: niente ingrandimento sul picco. */
+  .hero .speed-readout { font-size: clamp(3rem, 16vw, 4.4rem); letter-spacing: -.05em; }
+  .hero .power-readout { font-size: clamp(3rem, 16vw, 4.4rem); }
+  .speed-peak { animation: none !important; }
+  .power-extra { animation: none; }
+  .speed-reading, .power-reading { overflow: visible; }
+  .speed-dial { width: 150px; height: 70px; bottom: 22%; }
+  .speed-dial span { height: 68px; }
+
+  /* Nord in alto è già implicito: la rosa toglieva spazio all'immagine. */
+  .compass { display: none; }
+}
+
+/* ===== terzo giro: equilibrio fra mappa e numeri ===== */
+@media (max-width: 520px) {
+  /* La mappa riempie l'avanzo ma non si mangia lo schermo: i numeri vengono prima. */
+  .satellite-track { max-height: 42vh; }
+
+  /* Il quadrante deve restare dentro la sua colonna, non sconfinare sulla potenza. */
+  .speed-reading { overflow: hidden; }
+  .power-reading { overflow: visible; }
+
+  /* Potenza e velocità sono già enormi qui sopra: nella striscia sono ripetizione. */
+  .run-strip .tone-power, .run-strip .tone-speed { display: none; }
+  .run-strip { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+/* ===== quarto giro: lo spazio in avanzo va ai numeri, non alla mappa ===== */
+@media (max-width: 520px) {
+  .satellite-track { flex: 0 1 auto; height: 38vh; min-height: 200px; max-height: none; }
+
+  /* L'hero si prende l'avanzo e centra i numeri: niente vuoto sopra il pulsante. */
+  .dyno .hero { flex: 1 1 auto; align-content: center; margin: 0 auto; }
+  .dyno .danger { margin-top: 0; }
+
+  /* Lo scaleX allargava il numero oltre la colonna e mangiava la "W". */
+  .hero .power-readout { transform: none; font-size: clamp(2.8rem, 15vw, 4.2rem); }
+  .hero .speed-readout { font-size: clamp(2.8rem, 15vw, 4.2rem); }
+  .hero-reading { min-width: 0; overflow: hidden; }
+  .hero em { font-size: .24em; }
+}
+
+/* ===== quinto giro: l'hero deve stirarsi, non restringersi al contenuto ===== */
+@media (max-width: 520px) {
+  .satellite-track { height: 42vh; }
+  /* In un flex a colonna "margin: 0 auto" fa collassare l'elemento sulla sua larghezza. */
+  .dyno .hero { width: 100%; max-width: none; margin: 0; align-self: stretch; }
+  .hero .power-readout, .hero .speed-readout { font-size: clamp(3.2rem, 18vw, 5rem); }
+}
+
+/* ===== rifinitura finale ===== */
+@media (max-width: 520px) {
+  .satellite-track { height: 50vh; }
+  /* Con la crenatura negativa del numero l'unità finiva sopra l'ultima cifra. */
+  .hero em { margin-left: .35em; letter-spacing: 0; }
+}
+
+/* ========= mini menù del ghost ========= */
+.ghost-menu { position: absolute; z-index: 600; left: 50%; bottom: 4px; transform: translateX(-50%); font-family: "DM Mono"; }
+.ghost-menu > button {
+  display: flex; align-items: baseline; gap: .4rem;
+  padding: .25rem .55rem; background: #091016e8; border: 1px solid #35404a; font-size: .62rem;
+}
+.ghost-menu > button b { color: #8b96a3; font-weight: 400; letter-spacing: .08em; }
+.ghost-menu > button span { color: #dff8ff; letter-spacing: .04em; }
+.ghost-menu > button.armed { border-color: #29d7ff; box-shadow: 0 0 10px #29d7ff44; }
+.ghost-menu > button.armed span { color: #7be3ff; }
+.ghost-menu ul {
+  position: absolute; left: 50%; bottom: calc(100% + 4px); transform: translateX(-50%);
+  margin: 0; padding: 0; list-style: none; width: 190px;
+  background: #070c11f2; border: 1px solid #35404a; max-height: 60vh; overflow-y: auto;
+}
+.ghost-menu li + li { border-top: 1px solid #1c242d; }
+.ghost-menu li button {
+  display: block; width: 100%; text-align: left; padding: .38rem .5rem;
+  background: none; border: 0; font-size: .64rem;
+}
+.ghost-menu li button b { display: block; color: #dff8ff; letter-spacing: .04em; }
+.ghost-menu li button small { display: block; color: #8b96a3; font-size: .54rem; margin-top: .05rem; }
+.ghost-menu li button.chosen { background: #10222c; }
+.ghost-menu li button.chosen b { color: #7be3ff; }
+
+/* Il ghost del record si distingue da quello a pari watt. */
+.ghost-marker.rival .tdv-body, .ghost-marker.rival .tdv-shell { fill: #29d7ff; stroke: #04212e; }
+.ghost-marker.rival .tdv-canopy { fill: #06202c; stroke: #bfefff; }
+.ghost-marker.rival .topdown-vehicle { opacity: .9; filter: drop-shadow(0 2px 5px #000a); }
+.ghost-marker.record .topdown-vehicle { opacity: .5; filter: grayscale(1) drop-shadow(0 0 4px #000); }
+.ghost-marker.record .tdv-body, .ghost-marker.record .tdv-shell { fill: #cfd9e4; stroke: #1a2330; }
+
+@media (max-width: 520px) {
+  .ghost-menu > button { font-size: .55rem; padding: .2rem .4rem; }
+  .ghost-menu ul { width: 168px; }
+  /* La targhetta del settore lascia il centro al menù. */
+  .sector-flag { left: 8px; transform: none; bottom: 16px; }
+  .track-outline { bottom: 40px; }
 }
