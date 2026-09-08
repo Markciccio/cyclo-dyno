@@ -1,4 +1,237 @@
-.selector{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.5rem;margin-top:.6rem;max-width:680px}.selector button{text-align:left;min-height:4.4rem}.selector b,.selector small{display:block}.selector small{font-family:'DM Mono';font-size:.68rem;color:#aab1bc;margin-top:.25rem}.track-map{display:flex;gap:1rem;align-items:center;justify-content:center;min-height:7rem;background:#0c1015;border:1px solid #29313b;padding:.5rem}.track-map>div{min-width:8rem}.track-map>div b{display:block;font-size:2rem;color:var(--volt)}.track-map svg{width:130px;height:90px}.track-base,.track-progress{fill:none;stroke-width:5;stroke-linecap:round}.track-base{stroke:#303843}.track-progress{stroke:var(--volt);filter:drop-shadow(0 0 4px #d8ff22)}.track-marker{fill:#fff;filter:drop-shadow(0 0 5px var(--volt))}@media(max-width:520px){.selector{grid-template-columns:1fr}.track-map{justify-content:space-between}.track-map svg{width:105px}}
-.home>.field,.home>fieldset:nth-of-type(3){display:none}
-.satellite-track{position:relative;height:300px;border:1px solid #35404a;background:#090d12;overflow:hidden}.satellite-map{position:absolute;inset:0}.satellite-title{position:absolute;z-index:500;left:12px;top:12px;display:grid;padding:.55rem .75rem;background:#091016dd;border-left:3px solid var(--volt);font-family:'DM Mono';font-size:.67rem}.satellite-title b{font-size:1.1rem;color:white}.satellite-title em{font-style:normal;color:var(--volt)}.vehicle-switch{position:absolute;z-index:500;right:10px;top:10px;width:132px;display:grid;gap:4px}.vehicle-switch button{background:#0a1018e8;padding:.38rem;text-align:left;font-size:.67rem}.vehicle-switch button.active{border-color:#ff6c19;box-shadow:0 0 12px #ff6c19}.vehicle-switch strong{font-size:1.25rem;float:left;margin-right:.35rem;color:var(--volt)}.vehicle-switch span,.vehicle-switch small{display:block}.vehicle-switch small{font-family:'DM Mono';font-size:.55rem;color:#aab1bc}.satellite-note{position:absolute;z-index:500;bottom:0;left:0;margin:0;padding:.2rem .45rem;background:#090d12cc;font:10px 'DM Mono';color:#ccd5df}.vehicle-marker{background:transparent;border:0}.vehicle-shape{width:50px;height:50px;border:3px solid #fff;border-radius:50%;display:grid;place-items:center;color:white;background:#1cb8e6cc;box-shadow:0 0 14px #1cb8e6;font-size:1.4rem}.vehicle-shape.velomobile{border-radius:55% 45% 55% 45%;background:#ff6c19;color:#111;box-shadow:0 0 16px #ff6c19}.vehicle-shape.recumbent{border-radius:45% 55%;background:#64e872}.vehicle-shape.trike{clip-path:polygon(50% 0,100% 100%,0 100%);border:0;background:#efc62b;color:#111}@media(max-width:520px){.satellite-track{height:260px}.vehicle-switch{width:108px}.satellite-title{max-width:180px}.vehicle-switch span{font-size:.6rem}}
-.dyno .metrics>div:nth-child(3){background:linear-gradient(135deg,#082736,#0b151e);border-top:2px solid #28c9ff}.dyno .metrics>div:nth-child(3) label{color:#75dbff}.dyno .metrics>div:nth-child(3) b{font-size:clamp(1.8rem,6vw,3rem);line-height:1;color:#dff8ff;text-shadow:0 0 16px #1baee8}.dyno .metrics>div:nth-child(3)::before{content:'⚡ LIVE';display:block;font:10px 'DM Mono';color:#28c9ff;margin-bottom:.25rem}
+.selector {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem;
+  margin-top: 0.6rem;
+  max-width: 680px;
+}
+.selector button {
+  text-align: left;
+  min-height: 4.4rem;
+}
+.selector b,
+.selector small {
+  display: block;
+}
+.selector small {
+  font-family: "DM Mono";
+  font-size: 0.68rem;
+  color: #aab1bc;
+  margin-top: 0.25rem;
+}
+.track-map {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  justify-content: center;
+  min-height: 7rem;
+  background: #0c1015;
+  border: 1px solid #29313b;
+  padding: 0.5rem;
+}
+.track-map > div {
+  min-width: 8rem;
+}
+.track-map > div b {
+  display: block;
+  font-size: 2rem;
+  color: var(--volt);
+}
+.track-map svg {
+  width: 130px;
+  height: 90px;
+}
+.track-base,
+.track-progress {
+  fill: none;
+  stroke-width: 5;
+  stroke-linecap: round;
+}
+.track-base {
+  stroke: #303843;
+}
+.track-progress {
+  stroke: var(--volt);
+  filter: drop-shadow(0 0 4px #d8ff22);
+}
+.track-marker {
+  fill: #fff;
+  filter: drop-shadow(0 0 5px var(--volt));
+}
+@media (max-width: 520px) {
+  .selector {
+    grid-template-columns: 1fr;
+  }
+  .track-map {
+    justify-content: space-between;
+  }
+  .track-map svg {
+    width: 105px;
+  }
+}
+.home > .field,
+.home > fieldset:nth-of-type(3) {
+  display: none;
+}
+.satellite-track {
+  position: relative;
+  height: 300px;
+  border: 1px solid #35404a;
+  background: #090d12;
+  overflow: hidden;
+}
+.satellite-map {
+  position: absolute;
+  inset: 0;
+}
+.satellite-title {
+  position: absolute;
+  z-index: 500;
+  left: 12px;
+  top: 12px;
+  display: grid;
+  padding: 0.55rem 0.75rem;
+  background: #091016dd;
+  border-left: 3px solid var(--volt);
+  font-family: "DM Mono";
+  font-size: 0.67rem;
+}
+.satellite-title b {
+  font-size: 1.1rem;
+  color: white;
+}
+.satellite-title em {
+  font-style: normal;
+  color: var(--volt);
+}
+.vehicle-switch {
+  position: absolute;
+  z-index: 500;
+  right: 10px;
+  top: 10px;
+  width: 132px;
+  display: grid;
+  gap: 4px;
+}
+.vehicle-switch button {
+  background: #0a1018e8;
+  padding: 0.38rem;
+  text-align: left;
+  font-size: 0.67rem;
+}
+.vehicle-switch button.active {
+  border-color: #ff6c19;
+  box-shadow: 0 0 12px #ff6c19;
+}
+.vehicle-switch strong {
+  font-size: 1.25rem;
+  float: left;
+  margin-right: 0.35rem;
+  color: var(--volt);
+}
+.vehicle-switch span,
+.vehicle-switch small {
+  display: block;
+}
+.vehicle-switch small {
+  font-family: "DM Mono";
+  font-size: 0.55rem;
+  color: #aab1bc;
+}
+.satellite-note {
+  position: absolute;
+  z-index: 500;
+  bottom: 0;
+  left: 0;
+  margin: 0;
+  padding: 0.2rem 0.45rem;
+  background: #090d12cc;
+  font: 10px "DM Mono";
+  color: #ccd5df;
+}
+.vehicle-marker {
+  background: transparent;
+  border: 0;
+}
+.ghost-panel {
+  position: absolute;
+  z-index: 500;
+  left: 12px;
+  bottom: 28px;
+  display: grid;
+  gap: 0.12rem;
+  padding: 0.5rem 0.65rem;
+  background: #080d14eb;
+  border: 1px solid #657284;
+  font: 10px "DM Mono";
+  color: #ccd5df;
+}
+.ghost-panel b { color: #fff; font-size: 0.74rem; }
+.ghost-panel small { color: #aab1bc; }
+.ghost-panel strong { margin-top: 0.16rem; font-size: 0.8rem; }
+.ghost-panel.ahead { border-color: #48ed92; }
+.ghost-panel.ahead strong { color: #48ed92; }
+.ghost-panel.behind { border-color: #ff6c42; }
+.ghost-panel.behind strong { color: #ff8b6e; }
+.vehicle-shape {
+  width: 50px;
+  height: 50px;
+  border: 3px solid #fff;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  color: white;
+  background: #1cb8e6cc;
+  box-shadow: 0 0 14px #1cb8e6;
+  font-size: 1.4rem;
+}
+.vehicle-shape.velomobile {
+  border-radius: 55% 45% 55% 45%;
+  background: #ff6c19;
+  color: #111;
+  box-shadow: 0 0 16px #ff6c19;
+}
+.vehicle-shape.recumbent {
+  border-radius: 45% 55%;
+  background: #64e872;
+}
+.vehicle-shape.trike {
+  clip-path: polygon(50% 0, 100% 100%, 0 100%);
+  border: 0;
+  background: #efc62b;
+  color: #111;
+}
+@media (max-width: 520px) {
+  .satellite-track {
+    height: 260px;
+  }
+  .vehicle-switch {
+    width: 108px;
+  }
+  .satellite-title {
+    max-width: 180px;
+  }
+  .vehicle-switch span {
+    font-size: 0.6rem;
+  }
+}
+.dyno .metrics > div:nth-child(3) {
+  background: linear-gradient(135deg, #082736, #0b151e);
+  border-top: 2px solid #28c9ff;
+}
+.dyno .metrics > div:nth-child(3) label {
+  color: #75dbff;
+}
+.dyno .metrics > div:nth-child(3) b {
+  font-size: clamp(1.8rem, 6vw, 3rem);
+  line-height: 1;
+  color: #dff8ff;
+  text-shadow: 0 0 16px #1baee8;
+}
+.dyno .metrics > div:nth-child(3)::before {
+  content: "⚡ LIVE";
+  display: block;
+  font: 10px "DM Mono";
+  color: #28c9ff;
+  margin-bottom: 0.25rem;
+}
