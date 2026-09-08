@@ -10,13 +10,16 @@ import type {
 } from "./types";
 import { DemoPowerProvider } from "./services/demoProvider";
 import { AssiomaBluetoothProvider } from "./services/assiomaBluetooth";
-import { advanceVirtualSpeed, trackGrade } from "./logic/speed";
-import { calculateMetrics, leaderboardSort } from "./logic/metrics";
+import { advanceVirtualSpeed } from "./logic/speed";
+import { cornerLimitKmh, sampleTrack } from "./logic/tracks";
+import { calculateMetrics, formatLapTime, rankFor } from "./logic/metrics";
 import { sessionRepo, download } from "./storage/repository";
 import { Gauge } from "./components/Gauge";
 import { PowerChart } from "./components/PowerChart";
 import { TrackMap } from "./components/TrackMap";
-import { challenges, vehicles } from "./logic/challenges";
+import { ElevationProfile } from "./components/ElevationProfile";
+import { VehicleIcon } from "./components/VehicleIcon";
+import { challenges, challengeTrack, defaultRival, totalMassKg, vehicles } from "./logic/challenges";
 const defaults: Settings = {
   eventName: "HPV POWER CHALLENGE",
   defaultDuration: 60,
@@ -70,7 +73,9 @@ export function App() {
     [installPrompt, setInstallPrompt] = useState<InstallPromptEvent>(),
     [riderWeight, setRiderWeight] = useState(""),
     [vehicle, setVehicle] = useState<VehicleProfile>("velomobile"),
-    [challenge, setChallenge] = useState<ChallengeId>("dyno");
+    [challenge, setChallenge] = useState<ChallengeId>("dyno"),
+    [rival, setRival] = useState<VehicleProfile>(defaultRival("velomobile")),
+    [rivalMeters, setRivalMeters] = useState(0);
   const pRef = useRef(provider),
     sRef = useRef<SessionSample[]>([]),
     start = useRef(0),
@@ -81,6 +86,10 @@ export function App() {
     riderWeightRef = useRef(70),
     lastPowerPaint = useRef(0),
     lastSpeedPaint = useRef(0),
+    lastSamplePaint = useRef(0),
+    rivalRef = useRef<VehicleProfile>(defaultRival("velomobile")),
+    rivalSpeedRef = useRef(0),
+    rivalMetersRef = useRef(0),
     wakeLockRef = useRef<ScreenLock>(),
     sessionActiveRef = useRef(false);
   pRef.current = provider;
@@ -124,6 +133,12 @@ export function App() {
   function selectVehicle(next: VehicleProfile) {
     vehicleRef.current = next;
     setVehicle(next);
+    // Cambiando mezzo lo sfidante proposto cambia con lui, se non è stato scelto a mano.
+    if (rivalRef.current === next) selectRival(defaultRival(next));
+  }
+  function selectRival(next: VehicleProfile) {
+    rivalRef.current = next;
+    setRival(next);
   }
   async function requestWakeLock() {
     const api = (navigator as Navigator & { wakeLock?: { request: (type: "screen") => Promise<ScreenLock> } }).wakeLock;
@@ -171,6 +186,10 @@ export function App() {
     setDisplaySpeed(0);
     lastPowerPaint.current = 0;
     lastSpeedPaint.current = 0;
+    lastSamplePaint.current = 0;
+    rivalSpeedRef.current = 0;
+    rivalMetersRef.current = 0;
+    setRivalMeters(0);
     setCount(3);
     setView("countdown");
     let n = 3;
@@ -190,19 +209,25 @@ export function App() {
     void requestWakeLock();
     setView("dyno");
     const course = challenges[challenge];
+    const track = challengeTrack(challenge);
     try {
       pRef.current.start((x) => {
         if (ended.current) return;
         const prev = sRef.current.at(-1),
           elapsed = x.timestamp - start.current,
           dt = prev ? x.timestamp - prev.timestamp : 0,
+          spec = vehicles[vehicleRef.current],
+          metersDone = (prev?.distanceKm ?? 0) * 1000,
+          // Pendenza e raggio di curva vengono dal tracciato reale sotto le ruote.
+          point = track ? sampleTrack(track, metersDone) : undefined,
           speed = advanceVirtualSpeed({
             powerWatts: x.powerWatts,
             previousKmh: prev?.virtualSpeedKmh ?? 0,
             dtSeconds: dt / 1000,
-            grade: trackGrade(challenge, prev?.distanceKm ?? 0),
-            totalKg: riderWeightRef.current + vehicles[vehicleRef.current].weightKg + 2,
-            aeroCoefficient: vehicles[vehicleRef.current].aeroCoefficient,
+            grade: point?.grade ?? 0,
+            totalKg: totalMassKg(riderWeightRef.current, vehicleRef.current),
+            physics: spec,
+            speedLimitKmh: track ? cornerLimitKmh(track, metersDone, spec.lateralG) : undefined,
           }),
           distance =
             (prev?.distanceKm ?? 0) +
@@ -212,9 +237,30 @@ export function App() {
             elapsedMs: elapsed,
             virtualSpeedKmh: speed,
             distanceKm: distance,
+            gradePercent: point ? point.grade * 100 : undefined,
+            elevationMeters: point?.elevation,
           };
         sRef.current.push(y);
-        setSamples([...sRef.current]);
+        if (track && dt > 0) {
+          // Lo sfidante riceve gli stessi watt e li spende con la sua fisica.
+          const rivalSpec = vehicles[rivalRef.current];
+          const before = rivalSpeedRef.current;
+          rivalSpeedRef.current = advanceVirtualSpeed({
+            powerWatts: x.powerWatts,
+            previousKmh: before,
+            dtSeconds: dt / 1000,
+            grade: sampleTrack(track, rivalMetersRef.current).grade,
+            totalKg: totalMassKg(riderWeightRef.current, rivalRef.current),
+            physics: rivalSpec,
+            speedLimitKmh: cornerLimitKmh(track, rivalMetersRef.current, rivalSpec.lateralG),
+          });
+          rivalMetersRef.current += (((before + rivalSpeedRef.current) / 2) * dt) / 3600;
+        }
+        if (x.timestamp - lastSamplePaint.current >= 250) {
+          lastSamplePaint.current = x.timestamp;
+          setSamples([...sRef.current]);
+          setRivalMeters(rivalMetersRef.current);
+        }
         if (x.timestamp - lastSpeedPaint.current >= 1000) {
           lastSpeedPaint.current = x.timestamp;
           setDisplaySpeed(speed);
@@ -252,11 +298,20 @@ export function App() {
     pRef.current.stop();
     const data = sRef.current,
       m = calculateMetrics(data, settings.thresholds);
+    setSamples([...data]);
+    const covered = data.at(-1)?.distanceKm ?? 0;
+    const target = challenges[challenge].distanceKm;
+    const finishTrack = challengeTrack(challenge);
     setResult({
       id: crypto.randomUUID(),
       participantName: riderNameRef.current,
       riderWeightKg: riderWeightRef.current,
       vehicle: vehicleRef.current,
+      challenge,
+      elapsedSeconds: (performance.now() - start.current) / 1000,
+      distanceKm: covered,
+      climbedMeters: finishTrack ? sampleTrack(finishTrack, covered * 1000).climb : 0,
+      completed: valid && (!target || covered >= target - 0.005),
       timestamp: Date.now(),
       sessionDuration: (performance.now() - start.current) / 1000,
       samples: data,
@@ -281,12 +336,12 @@ export function App() {
     setView("home");
   }
   const ranked = useMemo(
-      () => leaderboardSort(sessions.filter((x) => x.validSession)),
-      [sessions],
+      () => rankFor(sessions.filter((x) => x.validSession), challenge),
+      [sessions, challenge],
     ),
     demor = useMemo(
-      () => leaderboardSort(sessions.filter((x) => x.dataSource === "demo")),
-      [sessions],
+      () => rankFor(sessions.filter((x) => x.dataSource === "demo"), challenge),
+      [sessions, challenge],
     );
   if (view === "countdown")
     return (
@@ -295,9 +350,9 @@ export function App() {
       </main>
     );
   if (view === "dyno") {
-    const progress = activeChallenge.distanceKm
-      ? (live?.distanceKm ?? 0) / activeChallenge.distanceKm
-      : 0;
+    const metersDone = (live?.distanceKm ?? 0) * 1000;
+    const liveTrack = challengeTrack(challenge);
+    const gradePercent = live?.gradePercent ?? 0;
     return (
       <main className="dyno">
         <header>
@@ -309,7 +364,17 @@ export function App() {
             <small>{activeChallenge.distanceKm ? " SEC" : " SEC LEFT"}</small>
           </b>
         </header>
-        <TrackMap challenge={challenge} progress={progress} elapsedSeconds={clock} vehicle={vehicle} onVehicleChange={selectVehicle} />
+        <TrackMap
+          challenge={challenge}
+          meters={metersDone}
+          elapsedSeconds={clock}
+          vehicle={vehicle}
+          onVehicleChange={selectVehicle}
+          rival={rival}
+          rivalMeters={rivalMeters}
+          onRivalChange={selectRival}
+          running
+        />
         {challenge === "dyno" && <VehicleControls vehicle={vehicle} onChange={selectVehicle} />}
         <section className="hero">
           <div className="hero-reading power-reading">
@@ -328,6 +393,37 @@ export function App() {
             <div className={`speed-scale ${newSpeedPeak ? "speed-extra" : ""}`}><div style={{width:`${Math.min(100,displaySpeed)}%`}}/>{newSpeedPeak&&<i>NUOVO PICCO · {speedPeak.toFixed(1)} km/h</i>}<span>0</span><b>100 km/h</b></div>
           </div>
         </section>
+        {liveTrack && (
+          <section className="run-strip">
+            <Bar n="POTENZA" v={`${displayPower}`} u="W" fill={displayPower / 800} tone="power" />
+            <Bar n="VELOCITÀ" v={displaySpeed.toFixed(1)} u="km/h" fill={displaySpeed / 100} tone="speed" />
+            <Bar n="CADENZA" v={`${live?.cadenceRpm ?? "--"}`} u="rpm" fill={(live?.cadenceRpm ?? 0) / 150} tone="cadence" />
+            <Bar
+              n="PENDENZA"
+              v={`${gradePercent >= 0 ? "+" : ""}${gradePercent.toFixed(1)}`}
+              u="%"
+              fill={Math.abs(gradePercent) / 15}
+              tone={gradePercent >= 8 ? "grade-hard" : gradePercent >= 3 ? "grade-mid" : "grade-easy"}
+            />
+            <Bar
+              n="DISTANZA"
+              v={(metersDone / 1000).toFixed(2)}
+              u="km"
+              fill={metersDone / liveTrack.lengthMeters}
+              tone="distance"
+            />
+            {liveTrack.totalClimb > 30 && (
+              <Bar
+                n="DISLIVELLO"
+                v={`${Math.round(sampleTrack(liveTrack, metersDone).climb)}`}
+                u={`/ ${Math.round(liveTrack.totalClimb)} m`}
+                fill={sampleTrack(liveTrack, metersDone).climb / liveTrack.totalClimb}
+                tone="climb"
+              />
+            )}
+          </section>
+        )}
+        {liveTrack && <ElevationProfile track={liveTrack} meters={metersDone} />}
         <section className="metrics">
           <Metric
             n="PEAK"
@@ -342,7 +438,7 @@ export function App() {
             n="DISTANCE"
             v={
               activeChallenge.distanceKm
-                ? `${((live?.distanceKm ?? 0) * 1000).toFixed(0)} m`
+                ? `${metersDone.toFixed(0)} m`
                 : fmt(calculateMetrics(samples, settings.thresholds).best5s)
             }
           />
@@ -363,9 +459,21 @@ export function App() {
             {result.quality}
           </p>
           <h1>{result.participantName}</h1>
-          <p className="system-weight">{result.riderWeightKg ?? 70} kg atleta + {result.vehicle ? vehicles[result.vehicle].weightKg : 24} kg mezzo + 2 kg accessori</p>
-          <label>BEST 5 SECONDS</label>
-          <strong>{fmt(result.best5s)}</strong>
+          <p className="system-weight">
+            {challenges[result.challenge ?? "dyno"].label} · {result.riderWeightKg ?? 70} kg atleta +{" "}
+            {result.vehicle ? vehicles[result.vehicle].weightKg : 24} kg mezzo + 2 kg accessori
+          </p>
+          {result.challenge && result.challenge !== "dyno" ? (
+            <>
+              <label>{result.completed ? "TEMPO SUL PERCORSO" : "PROVA NON COMPLETATA"}</label>
+              <strong>{result.completed ? formatLapTime(result.elapsedSeconds ?? 0) : `${(result.distanceKm ?? 0).toFixed(2)} km`}</strong>
+            </>
+          ) : (
+            <>
+              <label>BEST 5 SECONDS</label>
+              <strong>{fmt(result.best5s)}</strong>
+            </>
+          )}
           <div className="result-grid">
             <Metric n="PEAK POWER" v={fmt(result.peakPower)} />
             <Metric n="AVG POWER" v={fmt(result.averagePower)} />
@@ -383,6 +491,13 @@ export function App() {
               n="SESSION TIME"
               v={`${result.sessionDuration.toFixed(1)} s`}
             />
+            {!!result.distanceKm && <Metric n="DISTANZA" v={`${result.distanceKm.toFixed(2)} km`} />}
+            {!!result.climbedMeters && result.climbedMeters > 30 && (
+              <Metric n="DISLIVELLO" v={`${Math.round(result.climbedMeters)} m D+`} />
+            )}
+            {!!result.distanceKm && !!result.elapsedSeconds && (
+              <Metric n="MEDIA" v={`${(result.distanceKm / (result.elapsedSeconds / 3600)).toFixed(1)} km/h`} />
+            )}
           </div>
           <PowerChart samples={result.samples} />
           <div className="actions">
@@ -401,11 +516,19 @@ export function App() {
       <main>
         {nav}
         <section className="page">
-          <h1>LEADERBOARD</h1>
+          <h1>LEADERBOARD · {activeChallenge.label}</h1>
           <p className="sub">
-            ORDINATA PER BEST 5 SECONDS · SOLO SESSIONI VALID
+            {challenge === "dyno" ? "ORDINATA PER BEST 5 SECONDS" : "ORDINATA PER TEMPO SUL PERCORSO"} · SOLO SESSIONI VALID
           </p>
+          <div className="challenge-tabs">
+            {(Object.keys(challenges) as ChallengeId[]).map((id) => (
+              <button key={id} className={challenge === id ? "chosen" : ""} onClick={() => setChallenge(id)}>
+                {challenges[id].label}
+              </button>
+            ))}
+          </div>
           <Table
+            challenge={challenge}
             sessions={ranked}
             onDelete={async (id) => {
               if (confirm("Eliminare risultato?")) {
@@ -415,17 +538,17 @@ export function App() {
             }}
           />
           <h2>DEMO</h2>
-          <Table sessions={demor} />
+          <Table challenge={challenge} sessions={demor} />
           <div className="actions">
             <button
               onClick={() =>
                 download(
-                  "hpv-power-dyno.csv",
-                  "Rank,Name,Date,Best5s,Peak,Average,Source,Valid\n" +
+                  `hpv-power-dyno-${challenge}.csv`,
+                  "Rank,Name,Date,Challenge,Vehicle,TimeSeconds,DistanceKm,Best5s,Peak,Average,Source,Valid\n" +
                     ranked
                       .map(
                         (s, i) =>
-                          `${i + 1},${s.participantName},${new Date(s.timestamp).toISOString()},${s.best5s},${s.peakPower},${s.averagePower},${s.dataSource},${s.validSession}`,
+                          `${i + 1},${s.participantName},${new Date(s.timestamp).toISOString()},${s.challenge ?? "dyno"},${s.vehicle ?? ""},${(s.elapsedSeconds ?? 0).toFixed(1)},${(s.distanceKm ?? 0).toFixed(3)},${s.best5s},${s.peakPower},${s.averagePower},${s.dataSource},${s.validSession}`,
                       )
                       .join("\n"),
                   "text/csv",
@@ -614,27 +737,42 @@ function Metric({ n, v }: { n: string; v: string }) {
     </div>
   );
 }
+function Bar({ n, v, u, fill, tone }: { n: string; v: string; u: string; fill: number; tone: string }) {
+  return (
+    <div className={`run-cell tone-${tone}`}>
+      <label>{n}</label>
+      <b>
+        {v}
+        <em> {u}</em>
+      </b>
+      <i style={{ width: `${Math.max(0, Math.min(100, fill * 100))}%` }} />
+    </div>
+  );
+}
 function SpeedDial({ speed }: { speed: number }) {
   const ratio = Math.min(1, speed / 100);
   return <div className="speed-dial" aria-hidden="true">{Array.from({ length: 25 }, (_, index) => <span key={index} className={index / 24 <= ratio ? index >= 21 ? "lit red" : "lit" : ""} style={{ transform: `rotate(${-120 + index * 10}deg)` }} />)}</div>
 }
 function VehicleControls({ vehicle, onChange }: { vehicle: VehicleProfile; onChange: (vehicle: VehicleProfile) => void }) {
-  return <aside className="test-vehicle-switch">{(Object.keys(vehicles) as VehicleProfile[]).map(id=><button onClick={()=>onChange(id)} className={vehicle===id?"active":""} key={id}><strong>{id==="velomobile"?"◖":id==="trike"?"△":"●"}</strong><span>{vehicles[id].label}</span><small>{vehicles[id].referenceKmh} km/h @250W</small></button>)}</aside>
+  return <aside className="test-vehicle-switch">{(Object.keys(vehicles) as VehicleProfile[]).map(id=><button onClick={()=>onChange(id)} className={vehicle===id?"active":""} key={id}><VehicleIcon vehicle={id}/><span>{vehicles[id].label}</span><small>CdA <b>{vehicles[id].cda.toFixed(3).replace(".", ",")}</b></small><small>Crr <b>{vehicles[id].crr.toFixed(4).replace(".", ",")}</b></small></button>)}</aside>
 }
 function Table({
   sessions,
   onDelete,
+  challenge = "dyno",
 }: {
   sessions: DynoSession[];
   onDelete?: (id: string) => void;
+  challenge?: ChallengeId;
 }) {
+  const timed = challenge !== "dyno";
   return (
     <div className="table">
       <div className="tr head">
         <span>POS</span>
         <span>NAME</span>
-        <span>BEST 5S</span>
-        <span>PEAK</span>
+        <span>{timed ? "TEMPO" : "BEST 5S"}</span>
+        <span>{timed ? "MEZZO" : "PEAK"}</span>
         <span>AVG</span>
       </div>
       {sessions.length ? (
@@ -642,8 +780,8 @@ function Table({
           <div className="tr" key={s.id}>
             <span>{i + 1}</span>
             <span>{s.participantName}</span>
-            <span>{fmt(s.best5s)}</span>
-            <span>{fmt(s.peakPower)}</span>
+            <span>{timed ? (s.completed ? formatLapTime(s.elapsedSeconds ?? 0) : "DNF") : fmt(s.best5s)}</span>
+            <span>{timed ? (s.vehicle ? vehicles[s.vehicle].label : "--") : fmt(s.peakPower)}</span>
             <span>{fmt(s.averagePower)}</span>
             {onDelete && <button onClick={() => onDelete(s.id)}>×</button>}
           </div>

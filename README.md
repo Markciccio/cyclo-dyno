@@ -12,9 +12,23 @@ Inserisci nickname e durata, quindi avvia **DEMO MODE** per provare l'intero flu
 
 Web Bluetooth richiede HTTPS (localhost è l'eccezione). Per Vercel: importa il repository GitHub, usa `npm run build` e pubblica la cartella `dist`.
 
+## Percorsi e simulazione
+
+I tracciati non sono disegnati a mano: la geometria viene da OpenStreetMap (ODbL) ed è congelata in `src/logic/trackData.ts`, quindi l'app resta interamente offline.
+
+- **Monza**: centerline del circuito GP ricomposta dalle way OSM, 5794 m contro i 5793 m ufficiali.
+- **Mottarone**: routing OSRM da Armeno, troncato agli 11,7 km ufficiali; quote SRTM ancorate a 538 → 1437 m. Le pendenze per 500 m coincidono con il profilo climbfinder entro 1,1 punti percentuali.
+- **Velodromo**: anello standard da 400 m (rettilinei 84,39 m, raggio 36,5 m) sul campo di Gattico, perché in OSM lì non è mappata nessuna pista.
+
+Il mezzo si muove sulla polilinea reale: posizione, rotta, pendenza e raggio di curva sono letti sotto le ruote a ogni campione. Il modello è newtoniano, `a = (spinta − resistenze) / massa`, con resistenze gravità + rotolamento + aria: la massa conta davvero sull'accelerazione e in salita.
+
+Durante la prova un secondo mezzo corre accanto al tuo con **gli stessi watt istante per istante**: pedalando in velomobile vedi dove sarebbe la bici da corsa, e viceversa. Il pannello in alto a destra dà il distacco in metri e lo sfidante si sceglie dalla barra in basso.
+
+Ogni mezzo ha CdA, Crr e accelerazione laterale sostenibile propri (`src/logic/challenges.ts`). La velocità in curva è limitata dalla curvatura del tracciato e la frenata è propagata all'indietro, così si rallenta prima della curva. La taratura è ancorata a rilievi reali in pista con il velomobile: prima variante 38 km/h al limite, Roggia e Ascari sopra i 50 in pieno. Su questi valori il giro simulato a 234 W esce intorno ai 380 s contro i 355 s del record reale: il modello resta un po' conservativo, e il parametro da ritoccare per avvicinarlo è `lateralG`.
+
 ## BLE e metriche
 
-Il provider usa il Cycling Power Service `0x1818` e Cycling Power Measurement `0x2A63`. La cadenza viene calcolata soltanto se sono presenti gli standard crank revolution data. Medie e finestre Best 1/5/10 s sono pesate sui timestamp: la classifica reale contiene solo sessioni `VALID` ed è ordinata per Best 5s. La prova sul Pixel con Assioma reale resta necessaria.
+Il provider usa il Cycling Power Service `0x1818` e Cycling Power Measurement `0x2A63`. La cadenza viene calcolata soltanto se sono presenti gli standard crank revolution data. Medie e finestre Best 1/5/10 s sono pesate sui timestamp. Ogni sessione registra la sfida a cui appartiene e la classifica è separata per sfida: il dyno sprint è ordinato per Best 5s, le prove a percorso per tempo, con i non completati in fondo. La prova sul Pixel con Assioma reale resta necessaria.
 
 ## PWA / offline
 

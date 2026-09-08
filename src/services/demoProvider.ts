@@ -20,9 +20,13 @@ export class DemoPowerProvider implements PowerDataProvider {
       return 280+Math.sin(t*.6)*42+(Math.random()-.5)*22 // 200–300 W, media giro ~250 W
     }
     if(this.scenario==='mottarone'){
+      // In salita non si smette di pedalare: potenza continua con deriva da fatica.
       if(t<8)return 300+(Math.random()-.5)*18
-      if(phase>55)return 0
-      return 263+Math.sin(t*.42)*24+(Math.random()-.5)*16 // media salita ~240 W
+      return Math.max(150,270-t*.045)+Math.sin(t*.42)*22+(Math.random()-.5)*16
+    }
+    if(this.scenario==='velodrome'){
+      // Anello corto: rilanci in rettilineo, un filo di respiro in curva.
+      return 300+Math.sin(t*.9)*70+(Math.random()-.5)*24
     }
     return 255+Math.sin(t*.8)*32+(Math.random()-.5)*20
   }

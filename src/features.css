@@ -258,3 +258,169 @@
   .dyno .metrics>div{padding:.52rem .3rem}.dyno .metrics b,.dyno .metrics>div:nth-child(3) b{font-size:1.02rem}
   .dyno .chart{height:70px;margin:.55rem 0}
 }
+
+/* ========= GPS: mezzo visto dall'alto, sagoma tracciato, altimetria ========= */
+.satellite-stage { position: absolute; inset: 0; }
+.satellite-track { height: 360px; }
+
+/* Il marker ruota secondo la rotta: il transform lo mette TrackMap sull'svg interno. */
+.vehicle-marker, .ghost-marker { background: transparent; border: 0; }
+.topdown-vehicle {
+  width: 40px; height: 44px; display: block;
+  transform-origin: 50% 50%;
+  transition: transform .18s linear;
+  filter: drop-shadow(0 2px 5px #000a);
+}
+.tdv-body, .tdv-shell { fill: #ff7a1a; stroke: #2a1000; stroke-width: 1.1; }
+.tdv-canopy { fill: #0d2231; stroke: #ffcf9a; stroke-width: .8; opacity: .95; }
+.tdv-wheel { fill: #10161d; stroke: #c9d3dd; stroke-width: .7; }
+.tdv-axle { stroke: #c9d3dd; stroke-width: 1.1; fill: none; }
+.ghost-marker .topdown-vehicle { opacity: .45; filter: grayscale(1) drop-shadow(0 0 4px #000); }
+.ghost-marker .tdv-shell { fill: #9fb4c6; }
+
+.compass {
+  position: absolute; z-index: 500; right: 12px; bottom: 34px;
+  width: 30px; height: 30px; display: grid; place-items: center;
+  border: 1px solid #35404a; border-radius: 50%; background: #091016cc;
+  font: 700 11px "DM Mono"; color: var(--volt);
+}
+.compass::before {
+  content: ""; position: absolute; top: 2px;
+  border: 5px solid transparent; border-bottom-color: #ff4c1f;
+}
+.sector-flag {
+  position: absolute; z-index: 500; left: 50%; top: 12px; transform: translateX(-50%);
+  padding: .22rem .6rem; background: #091016dd; border: 1px solid #35404a;
+  font: 11px "DM Mono"; letter-spacing: .08em; color: #dff8ff; white-space: nowrap;
+}
+
+.track-outline {
+  position: absolute; z-index: 500; left: 12px; bottom: 28px; width: 148px;
+  padding: .45rem .55rem; background: #091016e0; border: 1px solid #35404a;
+  font-family: "DM Mono";
+}
+.track-outline-head small { display: block; font-size: .5rem; color: #8b96a3; letter-spacing: .1em; }
+.track-outline-head b { font-size: .95rem; color: #fff; letter-spacing: .04em; }
+.track-outline svg { width: 100%; height: 92px; display: block; margin: .2rem 0; }
+.outline-road { fill: none; stroke: #5ef2c0; stroke-width: 3; stroke-linejoin: round; stroke-linecap: round; opacity: .9; }
+.outline-start { fill: #ff2d55; }
+.outline-here { fill: #ff7a1a; stroke: #fff; stroke-width: 1.5; }
+.track-outline dl { display: flex; gap: .6rem; margin: 0; }
+.track-outline dt { font-size: .48rem; color: #8b96a3; letter-spacing: .06em; }
+.track-outline dd { margin: 0; font-size: .72rem; color: #dff8ff; }
+
+/* Il pannello ghost scende sotto la sagoma per non sovrapporsi. */
+.ghost-panel { left: 170px; }
+
+/* ========= striscia dati sotto la mappa ========= */
+.run-strip {
+  display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: .35rem;
+  max-width: 1100px; margin: .6rem auto 0;
+}
+.run-cell {
+  position: relative; padding: .45rem .5rem .6rem; background: #0d131a;
+  border: 1px solid #232c35; min-width: 0; overflow: hidden;
+}
+.run-cell label { display: block; font: 10px "DM Mono"; letter-spacing: .09em; color: #8b96a3; }
+.run-cell b { font-size: clamp(1rem, 3.4vw, 1.7rem); color: #dff8ff; white-space: nowrap; }
+.run-cell em { font-size: .45em; font-style: normal; color: #8b96a3; }
+.run-cell i { position: absolute; left: 0; bottom: 0; height: 3px; background: var(--volt); transition: width .2s linear; }
+.tone-power b { color: #ffd166; } .tone-power i { background: #ffb020; }
+.tone-speed b { color: #7be3ff; } .tone-speed i { background: #1baee8; }
+.tone-cadence b { color: #b6f36a; } .tone-cadence i { background: #8fd117; }
+.tone-distance b { color: #c8b6ff; } .tone-distance i { background: #8b6cff; }
+.tone-climb b { color: #ffa8c4; } .tone-climb i { background: #ff5c8a; }
+.tone-grade-easy b { color: #7ce8a4; } .tone-grade-easy i { background: #35c46e; }
+.tone-grade-mid b { color: #ffc36a; } .tone-grade-mid i { background: #ff9f1c; }
+.tone-grade-hard b { color: #ff8a6a; } .tone-grade-hard i { background: #ff4c1f; }
+
+/* ========= profilo altimetrico ========= */
+.elevation-profile {
+  position: relative; max-width: 1100px; margin: .35rem auto 0; height: 62px;
+  background: #0d131a; border: 1px solid #232c35;
+}
+.elevation-profile svg { width: 100%; height: 100%; display: block; }
+.elev-band { stroke: none; }
+.elev-flat { fill: #2b6f57; } .elev-easy { fill: #35c46e; } .elev-mid { fill: #ff9f1c; }
+.elev-hard { fill: #ff6a2a; } .elev-wall { fill: #e2231a; }
+.elev-cursor { stroke: #fff; stroke-width: .6; }
+.elevation-profile span, .elevation-profile b {
+  position: absolute; bottom: 3px; font: 10px "DM Mono"; color: #dff8ff;
+  background: #0d131acc; padding: 0 .25rem;
+}
+.elevation-profile span { left: 4px; }
+.elevation-profile b { right: 4px; color: #ffa8c4; }
+
+/* ========= classifica per sfida ========= */
+.challenge-tabs { display: flex; flex-wrap: wrap; gap: .35rem; margin: .5rem 0 1rem; }
+.challenge-tabs button { font-size: .7rem; padding: .35rem .7rem; background: #0d131a; }
+.challenge-tabs button.chosen { border-color: #ff6c19; color: #ffcf9a; box-shadow: 0 0 10px #ff6c1955; }
+
+.vehicle-switch small b, .test-vehicle-switch small b { color: #dff8ff; font-weight: 400; }
+.vehicle-icon { width: 26px; height: 17px; float: left; margin-right: .35rem; fill: none; stroke: var(--volt); stroke-width: 3; }
+.vehicle-icon circle { fill: none; }
+.velomobile-icon path:first-child { fill: #ff7a1a22; }
+.test-vehicle-switch .vehicle-icon { width: 30px; height: 19px; }
+
+@media (max-width: 900px) {
+  .run-strip { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (max-width: 520px) {
+  .satellite-track { height: 300px; }
+  .track-outline { width: 104px; left: 6px; bottom: 22px; padding: .3rem .35rem; }
+  .track-outline svg { height: 60px; }
+  .track-outline-head b { font-size: .7rem; }
+  .track-outline dt { font-size: .42rem; } .track-outline dd { font-size: .58rem; }
+  .sector-flag { font-size: 9px; top: 6px; padding: .15rem .4rem; }
+  .compass { width: 24px; height: 24px; right: 6px; bottom: 26px; font-size: 9px; }
+  .run-strip { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .25rem; margin-top: .35rem; }
+  .run-cell { padding: .3rem .35rem .45rem; }
+  .run-cell label { font-size: 8px; letter-spacing: .04em; }
+  .run-cell b { font-size: .95rem; }
+  .elevation-profile { height: 46px; }
+  .topdown-vehicle { width: 32px; height: 35px; }
+}
+
+/* Su schermo stretto i pulsanti mezzo restano solo icona: va centrata. */
+@media (max-width: 520px) {
+  .vehicle-switch button { display: grid; place-items: center; }
+  .vehicle-switch .vehicle-icon { float: none; margin: 0; width: 28px; height: 18px; }
+}
+
+/* ========= sfidante: stessi watt, mezzo diverso ========= */
+.rival-marker { background: transparent; border: 0; }
+.rival-marker .topdown-vehicle { opacity: .9; }
+.rival-marker .tdv-body, .rival-marker .tdv-shell { fill: #29d7ff; stroke: #04212e; }
+.rival-marker .tdv-canopy { fill: #06202c; stroke: #bfefff; }
+
+.rival-panel {
+  position: absolute; z-index: 500; right: 12px; top: 12px;
+  display: grid; padding: .4rem .6rem; background: #091016e0;
+  border: 1px solid #35404a; border-right: 3px solid #29d7ff;
+  font-family: "DM Mono"; text-align: right;
+}
+.rival-panel span { font-size: .55rem; color: #7be3ff; letter-spacing: .07em; }
+.rival-panel strong { font-size: 1.35rem; line-height: 1.1; color: #fff; }
+.rival-panel small { font-size: .55rem; color: #8b96a3; }
+.rival-panel.ahead strong { color: #48ed92; }
+.rival-panel.behind strong { color: #ff8b6e; }
+
+.rival-switch {
+  position: absolute; z-index: 500; left: 50%; bottom: 4px; transform: translateX(-50%);
+  display: flex; align-items: center; gap: .3rem;
+  padding: .2rem .35rem; background: #091016dd; border: 1px solid #35404a;
+}
+.rival-switch label { font: 9px "DM Mono"; letter-spacing: .1em; color: #8b96a3; }
+.rival-switch button { padding: .2rem .45rem; font-size: .58rem; background: #0d131a; }
+.rival-switch button.active { border-color: #29d7ff; color: #bfefff; box-shadow: 0 0 8px #29d7ff66; }
+
+/* Con lo sfidante in alto a destra, i pulsanti mezzo scendono sotto il suo pannello. */
+.vehicle-switch { top: 88px; }
+
+@media (max-width: 520px) {
+  .rival-panel { right: 6px; top: 6px; padding: .25rem .4rem; }
+  .rival-panel span, .rival-panel small { font-size: .48rem; }
+  .rival-panel strong { font-size: 1rem; }
+  .rival-switch { display: none; }
+  .vehicle-switch { top: 62px; }
+}

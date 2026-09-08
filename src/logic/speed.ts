@@ -1,41 +1,93 @@
-import type {ChallengeId} from '../types'
+const G = 9.80665
+/** Densità dell'aria a 15 °C sul livello del mare. */
+const RHO = 1.225
+/** Rendimento della trasmissione: i watt ai pedali non arrivano tutti a terra. */
+const DRIVETRAIN = 0.97
 
-const g=9.80665,rolling=.01
-const mottaroneGrades=[.046,.11,.11,.086,.09,.10,.078,.084,.074,.074,.048,.058,.05,.052,.034,.074,.082,.092,.078,.072,.082,.068,.116,.068]
+export interface VehiclePhysics {
+  /** Area frontale per coefficiente di forma, in m². Domina oltre i 25 km/h. */
+  cda: number
+  /** Coefficiente di rotolamento su asfalto reale. Domina in salita. */
+  crr: number
+  /** Massa del mezzo in kg, senza atleta. */
+  weightKg: number
+}
 
-/** Formula statica mantenuta per confronti e test. */
-export function calculateVirtualSpeed(powerWatts:number,referenceWatts=250,referenceKmh=36){return powerWatts<=0?0:referenceKmh*Math.cbrt(powerWatts/referenceWatts)}
-
-/** Pendenze medie dei settori; Mottarone ricavato dal profilo Armeno → vetta. */
-export function trackGrade(challenge:ChallengeId,distanceKm:number){
-  if(challenge==='mottarone')return mottaroneGrades[Math.min(mottaroneGrades.length-1,Math.floor(distanceKm/.5))]
-  if(challenge!=='monza')return 0
-  if(distanceKm<2.2)return .0136
-  if(distanceKm<3)return 0
-  if(distanceKm<4)return -.015
-  if(distanceKm<4.7)return .008
-  return -.01
+/** Formula statica mantenuta per confronti e test storici. */
+export function calculateVirtualSpeed(powerWatts: number, referenceWatts = 250, referenceKmh = 36) {
+  return powerWatts <= 0 ? 0 : referenceKmh * Math.cbrt(powerWatts / referenceWatts)
 }
 
 /**
- * Inversione numerica della formula di Ambrosini:
- * P = g × [massa × (pendenza + attrito) + K aero × v²] × v.
- * K viene corretto per ciascun veicolo; in salita il peso totale è quindi decisivo.
+ * Forza resistente totale in newton.
+ * Gravità e rotolamento usano seno e coseno della pendenza vera: alle pendenze
+ * del Mottarone l'approssimazione dei piccoli angoli inizia a sbagliare.
  */
-export function ambrosiniTargetKmh(powerWatts:number,totalKg:number,grade:number,aeroCoefficient:number){
-  const wheelPower=Math.max(0,powerWatts)*.97
-  let low=0,high=45
-  for(let i=0;i<42;i++){const v=(low+high)/2;const required=g*(totalKg*(grade+rolling)+aeroCoefficient*v*v)*v;if(required>wheelPower)high=v;else low=v}
-  return low*3.6
+export function resistanceNewtons(speedMs: number, totalKg: number, grade: number, { cda, crr }: VehiclePhysics) {
+  const slope = Math.atan(grade)
+  const gravity = totalKg * G * Math.sin(slope)
+  const rolling = totalKg * G * crr * Math.cos(slope)
+  const aero = 0.5 * RHO * cda * speedMs * speedMs
+  return gravity + rolling + aero
 }
 
-export function advanceVirtualSpeed({powerWatts,previousKmh,dtSeconds,grade=0,totalKg,aeroCoefficient}:{powerWatts:number;previousKmh:number;dtSeconds:number;grade?:number;totalKg:number;aeroCoefficient:number}){
-  const dt=Math.max(.02,Math.min(1,dtSeconds)),v=Math.max(0,previousKmh)/3.6
-  if(powerWatts>1){
-    const target=ambrosiniTargetKmh(powerWatts,totalKg,grade,aeroCoefficient)/3.6
-    return Math.max(0,v+Math.max(-1.3,Math.min(2.6,(target-v)/2.5))*dt)*3.6
+/** Watt ai pedali necessari per tenere una velocità costante. */
+export function powerForSpeed(speedKmh: number, totalKg: number, grade: number, physics: VehiclePhysics) {
+  const v = speedKmh / 3.6
+  return (resistanceNewtons(v, totalKg, grade, physics) * v) / DRIVETRAIN
+}
+
+/** Velocità di regime per una potenza data: inversione numerica di powerForSpeed. */
+export function steadyStateKmh(powerWatts: number, totalKg: number, grade: number, physics: VehiclePhysics) {
+  if (powerWatts <= 0) return 0
+  let low = 0
+  let high = 45
+  for (let i = 0; i < 42; i++) {
+    const v = (low + high) / 2
+    if (powerForSpeed(v * 3.6, totalKg, grade, physics) > powerWatts) high = v
+    else low = v
   }
-  // Ruota libera: gravità, rotolamento e aria agiscono anche a potenza zero.
-  const coastAcceleration=-g*(grade+rolling+(aeroCoefficient*v*v)/totalKg)
-  return Math.max(0,v+coastAcceleration*dt)*3.6
+  return low * 3.6
+}
+
+/** Nome storico di steadyStateKmh: l'inversione della formula di Ambrosini. */
+export const ambrosiniTargetKmh = steadyStateKmh
+
+/** Sotto questa velocità la potenza non si traduce più in spinta: evita la divisione per zero da fermo. */
+const MIN_TRACTION_MS = 1.5
+/** Accelerazione massima che le gambe riescono comunque a scaricare a terra. */
+const MAX_ACCEL_MSS = 4
+/** Frenata tipica di un ciclista che arriva in curva senza esagerare. */
+const BRAKE_MSS = 3
+
+export interface AdvanceInput {
+  powerWatts: number
+  previousKmh: number
+  dtSeconds: number
+  grade?: number
+  totalKg: number
+  physics: VehiclePhysics
+  /** Tetto imposto dalla curva in cui ci si trova, km/h. Assente sui percorsi liberi. */
+  speedLimitKmh?: number
+}
+
+/**
+ * Un passo di integrazione newtoniana: a = (spinta − resistenze) / massa.
+ * Sostituisce il vecchio inseguimento a costante di tempo fissa, che faceva
+ * accelerare un velomobile da 96 kg come una bici da 81 kg.
+ */
+export function advanceVirtualSpeed({ powerWatts, previousKmh, dtSeconds, grade = 0, totalKg, physics, speedLimitKmh }: AdvanceInput) {
+  const dt = Math.max(0.02, Math.min(1, dtSeconds))
+  const v = Math.max(0, previousKmh) / 3.6
+
+  const thrust = powerWatts > 1 ? (powerWatts * DRIVETRAIN) / Math.max(v, MIN_TRACTION_MS) : 0
+  const acceleration = Math.min(MAX_ACCEL_MSS, (thrust - resistanceNewtons(v, totalKg, grade, physics)) / totalKg)
+  let next = Math.max(0, v + acceleration * dt)
+
+  if (speedLimitKmh !== undefined) {
+    const limit = speedLimitKmh / 3.6
+    // Si frena verso il limite, non ci si teletrasporta: il rallentamento resta plausibile.
+    if (next > limit) next = Math.max(limit, next - BRAKE_MSS * dt)
+  }
+  return next * 3.6
 }
