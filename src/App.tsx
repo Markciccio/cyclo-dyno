@@ -34,6 +34,7 @@ type View =
   | "settings"
   | "debug"
   | "display";
+type InstallPromptEvent = Event & { prompt: () => Promise<void>; userChoice: Promise<{ outcome: "accepted" | "dismissed" }> };
 const fmt = (n: number | null, u = "W") =>
   n === null ? "--" : `${Math.round(n)} ${u}`;
 const powerLevel = (w: number) =>
@@ -64,6 +65,7 @@ export function App() {
     [sessions, setSessions] = useState<DynoSession[]>([]),
     [count, setCount] = useState(3),
     [notice, setNotice] = useState(""),
+    [installPrompt, setInstallPrompt] = useState<InstallPromptEvent>(),
     [riderWeight, setRiderWeight] = useState(""),
     [vehicle, setVehicle] = useState<VehicleProfile>("velomobile"),
     [challenge, setChallenge] = useState<ChallengeId>("dyno");
@@ -82,6 +84,13 @@ export function App() {
     sessionRepo.settings(defaults).then(setSettings);
     sessionRepo.getAll().then(setSessions);
   }, []);
+  useEffect(() => {
+    const capture = (event: Event) => { event.preventDefault(); setInstallPrompt(event as InstallPromptEvent); };
+    const installed = () => { setInstallPrompt(undefined); setNotice("APP INSTALLATA: la trovi nella schermata Home"); };
+    window.addEventListener("beforeinstallprompt", capture);
+    window.addEventListener("appinstalled", installed);
+    return () => { window.removeEventListener("beforeinstallprompt", capture); window.removeEventListener("appinstalled", installed); };
+  }, []);
   const live = samples.at(-1),
     isA = provider instanceof AssiomaBluetoothProvider,
     activeChallenge = challenges[challenge],
@@ -94,6 +103,7 @@ export function App() {
       <button onClick={() => setView("leaderboard")}>CLASSIFICA</button>
       <button onClick={() => setView("debug")}>DEBUG</button>
       <button onClick={() => setView("settings")}>SETTINGS</button>
+      <button className="install" onClick={installApp}>⇩ INSTALLA</button>
     </nav>
   );
   function demo() {
@@ -105,6 +115,17 @@ export function App() {
   function selectVehicle(next: VehicleProfile) {
     vehicleRef.current = next;
     setVehicle(next);
+  }
+  async function installApp() {
+    if (installPrompt) {
+      await installPrompt.prompt();
+      const choice = await installPrompt.userChoice;
+      if (choice.outcome === "accepted") setNotice("Installazione avviata");
+      setInstallPrompt(undefined);
+      return;
+    }
+    const isiPhone = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+    setNotice(isiPhone ? "Su iPhone: tocca Condividi, poi ‘Aggiungi a Home’" : "Apri il menu del browser e scegli ‘Installa app’ o ‘Aggiungi a schermata Home’");
   }
   async function connect() {
     try {
