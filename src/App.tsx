@@ -108,7 +108,7 @@ export function App() {
   );
   function demo() {
     provider.stop();
-    setProvider(new DemoPowerProvider());
+    setProvider(new DemoPowerProvider(challenge));
     setSource("demo");
     setNotice("DEMO MODE ATTIVA");
   }
@@ -144,6 +144,7 @@ export function App() {
     riderNameRef.current = name.trim() || randomName;
     riderWeightRef.current = Number.isFinite(parsedWeight) && parsedWeight >= 35 && parsedWeight <= 180 ? parsedWeight : 70;
     setName(riderNameRef.current);
+    if (pRef.current instanceof DemoPowerProvider) pRef.current.setScenario(challenge);
     sRef.current = [];
     setSamples([]);
     setDisplayPower(0);
