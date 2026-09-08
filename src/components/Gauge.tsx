@@ -1,1 +1,1 @@
-export function Gauge({power,range}:{power:number;range:number}){return <div className="gauge"><div className="gauge-fill" style={{width:`${Math.min(100,power/range*100)}%`}}/><span>0</span><b>{range} W</b></div>}
+export function Gauge({power,range}:{power:number;range:number}){const extra=power>range;return <div className={`gauge ${extra?'gauge-extra':''}`}><div className="gauge-fill" style={{width:`${Math.min(100,power/range*100)}%`}}/>{extra&&<i>+{Math.round(power-range)} W EXTRA</i>}<span>0</span><b>{range} W</b></div>}

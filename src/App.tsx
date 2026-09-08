@@ -37,7 +37,9 @@ type View =
 const fmt = (n: number | null, u = "W") =>
   n === null ? "--" : `${Math.round(n)} ${u}`;
 const powerLevel = (w: number) =>
-  w >= 500
+  w > 750
+    ? "power-extra"
+    : w >= 500
     ? "power-red"
     : w >= 300
       ? "power-orange"
@@ -239,13 +241,7 @@ export function App() {
             {live?.powerWatts ?? 0}
             <em> W</em>
           </strong>
-          <Gauge
-            power={live?.powerWatts ?? 0}
-            range={Math.max(
-              750,
-              Math.ceil((live?.powerWatts ?? 0) / 250) * 250,
-            )}
-          />
+          <Gauge power={live?.powerWatts ?? 0} range={750} />
         </section>
         <section className="metrics">
           <Metric
