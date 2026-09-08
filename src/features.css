@@ -123,6 +123,7 @@
   border-color: #ff6c19;
   box-shadow: 0 0 12px #ff6c19;
 }
+.test-vehicle-switch{display:flex;justify-content:center;gap:.4rem;margin:1rem auto;max-width:680px}.test-vehicle-switch button{background:#0a1018;padding:.45rem;text-align:left;font-size:.67rem;flex:1}.test-vehicle-switch button.active{border-color:#ff6c19;box-shadow:0 0 12px #ff6c19}.test-vehicle-switch strong{font-size:1.2rem;float:left;margin-right:.35rem;color:var(--volt)}.test-vehicle-switch span,.test-vehicle-switch small{display:block}.test-vehicle-switch small{font-family:'DM Mono';font-size:.55rem;color:#aab1bc}@media(max-width:520px){.test-vehicle-switch{flex-wrap:wrap}.test-vehicle-switch button{min-width:45%}}
 .vehicle-switch strong {
   font-size: 1.25rem;
   float: left;

@@ -60,13 +60,14 @@ export function App() {
     [sessions, setSessions] = useState<DynoSession[]>([]),
     [count, setCount] = useState(3),
     [notice, setNotice] = useState(""),
-    [vehicle, setVehicle] = useState<VehicleProfile>("road"),
+    [vehicle, setVehicle] = useState<VehicleProfile>("velomobile"),
     [challenge, setChallenge] = useState<ChallengeId>("dyno");
   const pRef = useRef(provider),
     sRef = useRef<SessionSample[]>([]),
     start = useRef(0),
     timer = useRef<number>(),
-    ended = useRef(false);
+    ended = useRef(false),
+    vehicleRef = useRef<VehicleProfile>("velomobile");
   pRef.current = provider;
   useEffect(() => {
     sessionRepo.settings(defaults).then(setSettings);
@@ -89,6 +90,10 @@ export function App() {
     setProvider(new DemoPowerProvider());
     setSource("demo");
     setNotice("DEMO MODE ATTIVA");
+  }
+  function selectVehicle(next: VehicleProfile) {
+    vehicleRef.current = next;
+    setVehicle(next);
   }
   async function connect() {
     try {
@@ -121,8 +126,7 @@ export function App() {
     start.current = performance.now();
     ended.current = false;
     setView("dyno");
-    const course = challenges[challenge],
-      vehicleCfg = vehicles[vehicle];
+    const course = challenges[challenge];
     try {
       pRef.current.start((x) => {
         if (ended.current) return;
@@ -130,7 +134,7 @@ export function App() {
           speed = calculateVirtualSpeed(
             x.powerWatts,
             settings.referenceWatts,
-            vehicleCfg.referenceKmh,
+            vehicles[vehicleRef.current].referenceKmh,
           ),
           elapsed = x.timestamp - start.current,
           dt = prev ? x.timestamp - prev.timestamp : 0,
@@ -225,7 +229,8 @@ export function App() {
             <small>{activeChallenge.distanceKm ? " SEC" : " SEC LEFT"}</small>
           </b>
         </header>
-        <TrackMap challenge={challenge} progress={progress} elapsedSeconds={clock} />
+        <TrackMap challenge={challenge} progress={progress} elapsedSeconds={clock} vehicle={vehicle} onVehicleChange={selectVehicle} />
+        {challenge === "dyno" && <VehicleControls vehicle={vehicle} onChange={selectVehicle} />}
         <section className="hero">
           <label>POTENZA</label>
           <strong
@@ -503,35 +508,6 @@ export function App() {
             ))}
           </div>
         </fieldset>
-        <fieldset>
-          <legend>VEICOLO SIMULATO</legend>
-          <div className="selector">
-            {(Object.keys(vehicles) as VehicleProfile[]).map((id) => (
-              <button
-                key={id}
-                className={vehicle === id ? "chosen" : ""}
-                onClick={() => setVehicle(id)}
-              >
-                <b>{vehicles[id].label}</b>
-                <small>{vehicles[id].description}</small>
-              </button>
-            ))}
-          </div>
-        </fieldset>
-        {challenge === "dyno" && (
-          <fieldset>
-            <legend>DURATA PROVA</legend>
-            {[10, 20, 30, 60].map((x) => (
-              <button
-                className={settings.defaultDuration === x ? "chosen" : ""}
-                onClick={() => setSettings({ ...settings, defaultDuration: x })}
-                key={x}
-              >
-                {x} SEC
-              </button>
-            ))}
-          </fieldset>
-        )}
         <div className="actions">
           <button className="primary" onClick={begin} disabled={!name.trim()}>
             START TEST
@@ -551,6 +527,9 @@ function Metric({ n, v }: { n: string; v: string }) {
       <b>{v}</b>
     </div>
   );
+}
+function VehicleControls({ vehicle, onChange }: { vehicle: VehicleProfile; onChange: (vehicle: VehicleProfile) => void }) {
+  return <aside className="test-vehicle-switch">{(Object.keys(vehicles) as VehicleProfile[]).map(id=><button onClick={()=>onChange(id)} className={vehicle===id?"active":""} key={id}><strong>{id==="velomobile"?"◖":id==="trike"?"△":"●"}</strong><span>{vehicles[id].label}</span><small>{vehicles[id].referenceKmh} km/h @250W</small></button>)}</aside>
 }
 function Table({
   sessions,

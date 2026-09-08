@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import type { ChallengeId, VehicleProfile } from "../types";
@@ -19,15 +19,18 @@ export function TrackMap({
   challenge,
   progress,
   elapsedSeconds,
+  vehicle,
+  onVehicleChange,
 }: {
   challenge: ChallengeId;
   progress: number;
   elapsedSeconds: number;
+  vehicle: VehicleProfile;
+  onVehicleChange: (vehicle: VehicleProfile) => void;
 }) {
   const holder = useRef<HTMLDivElement>(null),
     map = useRef<L.Map>(),
     marker = useRef<L.Marker>(),
-    [vehicle, setVehicle] = useState<VehicleProfile>("road"),
     place = places[challenge as "monza" | "velodrome"];
   const isMonza = challenge === "monza";
   const ghostTarget = Math.min(monzaGhost.timeSeconds, progress * monzaGhost.timeSeconds);
@@ -83,7 +86,7 @@ export function TrackMap({
       <aside className="vehicle-switch">
         {(Object.keys(vehicles) as VehicleProfile[]).map((id) => (
           <button
-            onClick={() => setVehicle(id)}
+            onClick={() => onVehicleChange(id)}
             className={vehicle === id ? "active" : ""}
             key={id}
           >
