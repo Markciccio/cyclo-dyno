@@ -62,6 +62,7 @@ export function App() {
     [sessions, setSessions] = useState<DynoSession[]>([]),
     [count, setCount] = useState(3),
     [notice, setNotice] = useState(""),
+    [riderWeight, setRiderWeight] = useState(""),
     [vehicle, setVehicle] = useState<VehicleProfile>("velomobile"),
     [challenge, setChallenge] = useState<ChallengeId>("dyno");
   const pRef = useRef(provider),
@@ -69,7 +70,9 @@ export function App() {
     start = useRef(0),
     timer = useRef<number>(),
     ended = useRef(false),
-    vehicleRef = useRef<VehicleProfile>("velomobile");
+    vehicleRef = useRef<VehicleProfile>("velomobile"),
+    riderNameRef = useRef(""),
+    riderWeightRef = useRef(70);
   pRef.current = provider;
   useEffect(() => {
     sessionRepo.settings(defaults).then(setSettings);
@@ -111,7 +114,11 @@ export function App() {
     }
   }
   function begin() {
-    if (!name.trim()) return;
+    const randomName = `RIDER-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
+    const parsedWeight = Number(riderWeight.replace(",", "."));
+    riderNameRef.current = name.trim() || randomName;
+    riderWeightRef.current = Number.isFinite(parsedWeight) && parsedWeight >= 35 && parsedWeight <= 180 ? parsedWeight : 70;
+    setName(riderNameRef.current);
     sRef.current = [];
     setSamples([]);
     setCount(3);
@@ -141,10 +148,9 @@ export function App() {
             powerWatts: x.powerWatts,
             previousKmh: prev?.virtualSpeedKmh ?? 0,
             dtSeconds: dt / 1000,
-            referenceWatts: settings.referenceWatts,
-            referenceKmh: vehicles[vehicleRef.current].referenceKmh,
-            vehicle: vehicleRef.current,
             grade: trackGrade(challenge, prev?.distanceKm ?? 0),
+            totalKg: riderWeightRef.current + vehicles[vehicleRef.current].weightKg + 2,
+            aeroCoefficient: vehicles[vehicleRef.current].aeroCoefficient,
           }),
           distance =
             (prev?.distanceKm ?? 0) +
@@ -184,7 +190,9 @@ export function App() {
       m = calculateMetrics(data, settings.thresholds);
     setResult({
       id: crypto.randomUUID(),
-      participantName: name.trim(),
+      participantName: riderNameRef.current,
+      riderWeightKg: riderWeightRef.current,
+      vehicle: vehicleRef.current,
       timestamp: Date.now(),
       sessionDuration: (performance.now() - start.current) / 1000,
       samples: data,
@@ -290,6 +298,7 @@ export function App() {
             {result.quality}
           </p>
           <h1>{result.participantName}</h1>
+          <p className="system-weight">{result.riderWeightKg ?? 70} kg atleta + {result.vehicle ? vehicles[result.vehicle].weightKg : 24} kg mezzo + 2 kg accessori</p>
           <label>BEST 5 SECONDS</label>
           <strong>{fmt(result.best5s)}</strong>
           <div className="result-grid">
@@ -493,13 +502,17 @@ export function App() {
           ● {provider.status()}
         </p>
         <label className="field">
-          NOME PARTECIPANTE
+          NOME PARTECIPANTE <small>facoltativo</small>
           <input
             autoFocus
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="Nome o nickname"
           />
+        </label>
+        <label className="field">
+          PESO ATLETA <small>facoltativo · predefinito 70 kg</small>
+          <input value={riderWeight} onChange={(e) => setRiderWeight(e.target.value)} inputMode="decimal" placeholder="70" aria-label="Peso atleta in kg" />
         </label>
         <fieldset>
           <legend>MODALITÀ SFIDA</legend>
@@ -517,7 +530,7 @@ export function App() {
           </div>
         </fieldset>
         <div className="actions">
-          <button className="primary" onClick={begin} disabled={!name.trim()}>
+          <button className="primary" onClick={begin}>
             START TEST
           </button>
           <button onClick={connect}>CONNECT ASSIOMA</button>

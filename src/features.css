@@ -69,7 +69,6 @@
     width: 105px;
   }
 }
-.home > .field,
 .home > fieldset:nth-of-type(3) {
   display: none;
 }

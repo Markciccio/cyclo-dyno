@@ -14,6 +14,11 @@ const places = {
     zoom: 18,
     label: "GATTICO RUGBY · VELODROMO",
   },
+  mottarone: {
+    center: [45.846, 8.446] as L.LatLngExpression,
+    zoom: 13,
+    label: "MOTTARONE · SALITA DA ARMENO",
+  },
 };
 export function TrackMap({
   challenge,
@@ -31,7 +36,7 @@ export function TrackMap({
   const holder = useRef<HTMLDivElement>(null),
     map = useRef<L.Map>(),
     marker = useRef<L.Marker>(),
-    place = places[challenge as "monza" | "velodrome"];
+    place = places[challenge as "monza" | "velodrome" | "mottarone"];
   const isMonza = challenge === "monza";
   const ghostTarget = Math.min(monzaGhost.timeSeconds, progress * monzaGhost.timeSeconds);
   const delta = elapsedSeconds - ghostTarget;
