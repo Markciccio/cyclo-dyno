@@ -57,6 +57,8 @@ export function App() {
       new DemoPowerProvider(),
     ),
     [samples, setSamples] = useState<SessionSample[]>([]),
+    [displayPower, setDisplayPower] = useState(0),
+    [displaySpeed, setDisplaySpeed] = useState(0),
     [clock, setClock] = useState(0),
     [result, setResult] = useState<DynoSession>(),
     [sessions, setSessions] = useState<DynoSession[]>([]),
@@ -72,7 +74,9 @@ export function App() {
     ended = useRef(false),
     vehicleRef = useRef<VehicleProfile>("velomobile"),
     riderNameRef = useRef(""),
-    riderWeightRef = useRef(70);
+    riderWeightRef = useRef(70),
+    lastPowerPaint = useRef(0),
+    lastSpeedPaint = useRef(0);
   pRef.current = provider;
   useEffect(() => {
     sessionRepo.settings(defaults).then(setSettings);
@@ -121,6 +125,10 @@ export function App() {
     setName(riderNameRef.current);
     sRef.current = [];
     setSamples([]);
+    setDisplayPower(0);
+    setDisplaySpeed(0);
+    lastPowerPaint.current = 0;
+    lastSpeedPaint.current = 0;
     setCount(3);
     setView("countdown");
     let n = 3;
@@ -163,6 +171,14 @@ export function App() {
           };
         sRef.current.push(y);
         setSamples([...sRef.current]);
+        if (x.timestamp - lastSpeedPaint.current >= 1000) {
+          lastSpeedPaint.current = x.timestamp;
+          setDisplaySpeed(speed);
+        }
+        if (x.timestamp - lastPowerPaint.current >= 2000) {
+          lastPowerPaint.current = x.timestamp;
+          setDisplayPower(x.powerWatts);
+        }
         if (course.distanceKm && distance >= course.distanceKm) finish(true);
       });
     } catch (e) {
@@ -250,17 +266,18 @@ export function App() {
         <section className="hero">
           <div className="hero-reading power-reading">
             <label>POTENZA</label>
-            <strong className={`power-readout ${powerLevel(live?.powerWatts ?? 0)}`}>
-              {live?.powerWatts ?? 0}<em> W</em>
+            <strong className={`power-readout ${powerLevel(displayPower)}`}>
+              {displayPower}<em> W</em>
             </strong>
-            <Gauge power={live?.powerWatts ?? 0} range={750} />
+            <Gauge power={displayPower} range={750} />
           </div>
           <div className="hero-reading speed-reading">
             <label>VELOCITÀ</label>
+            <SpeedDial speed={displaySpeed} />
             <strong className={`speed-readout ${newSpeedPeak ? "speed-peak" : ""}`}>
-              {(live?.virtualSpeedKmh ?? 0).toFixed(1)}<em> km/h</em>
+              {displaySpeed.toFixed(1)}<em> km/h</em>
             </strong>
-            <div className={`speed-scale ${newSpeedPeak ? "speed-extra" : ""}`}><div style={{width:`${Math.min(100,(live?.virtualSpeedKmh??0))}%`}}/>{newSpeedPeak&&<i>NUOVO PICCO · {speedPeak.toFixed(1)} km/h</i>}<span>0</span><b>100 km/h</b></div>
+            <div className={`speed-scale ${newSpeedPeak ? "speed-extra" : ""}`}><div style={{width:`${Math.min(100,displaySpeed)}%`}}/>{newSpeedPeak&&<i>NUOVO PICCO · {speedPeak.toFixed(1)} km/h</i>}<span>0</span><b>100 km/h</b></div>
           </div>
         </section>
         <section className="metrics">
@@ -548,6 +565,10 @@ function Metric({ n, v }: { n: string; v: string }) {
       <b>{v}</b>
     </div>
   );
+}
+function SpeedDial({ speed }: { speed: number }) {
+  const ratio = Math.min(1, speed / 100);
+  return <div className="speed-dial" aria-hidden="true">{Array.from({ length: 25 }, (_, index) => <span key={index} className={index / 24 <= ratio ? index >= 21 ? "lit red" : "lit" : ""} style={{ transform: `rotate(${-120 + index * 10}deg)` }} />)}</div>
 }
 function VehicleControls({ vehicle, onChange }: { vehicle: VehicleProfile; onChange: (vehicle: VehicleProfile) => void }) {
   return <aside className="test-vehicle-switch">{(Object.keys(vehicles) as VehicleProfile[]).map(id=><button onClick={()=>onChange(id)} className={vehicle===id?"active":""} key={id}><strong>{id==="velomobile"?"◖":id==="trike"?"△":"●"}</strong><span>{vehicles[id].label}</span><small>{vehicles[id].referenceKmh} km/h @250W</small></button>)}</aside>
