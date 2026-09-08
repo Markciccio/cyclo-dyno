@@ -1,0 +1,1 @@
+export function Gauge({power,range}:{power:number;range:number}){return <div className="gauge"><div className="gauge-fill" style={{width:`${Math.min(100,power/range*100)}%`}}/><span>0</span><b>{range} W</b></div>}
