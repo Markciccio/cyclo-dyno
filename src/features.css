@@ -248,3 +248,13 @@
   .dyno .metrics{grid-template-columns:repeat(4,minmax(0,1fr));margin-top:.25rem}.dyno .metrics>div{padding:.35rem .25rem;min-width:0}.dyno .metrics label{font-size:.51rem;letter-spacing:.05em}.dyno .metrics b,.dyno .metrics>div:nth-child(3) b{font-size:.9rem;white-space:nowrap}.dyno .metrics>div:nth-child(3)::before{display:none}
   .dyno .chart{height:52px;margin:.35rem 0}.dyno .danger{padding:.45rem .75rem;font-size:.8rem}
 }
+@media(max-width:520px){
+  .satellite-track{height:285px}
+  .dyno .hero{margin:.75rem auto .45rem;gap:.6rem}
+  .hero .power-readout{font-size:clamp(5.7rem,24vw,7.5rem)}
+  .hero .speed-readout{font-size:clamp(6rem,25vw,7.9rem)}
+  .speed-dial{width:220px;height:102px}.speed-dial span{height:100px}
+  .gauge,.speed-scale{height:1.8rem;margin:.55rem auto}
+  .dyno .metrics>div{padding:.52rem .3rem}.dyno .metrics b,.dyno .metrics>div:nth-child(3) b{font-size:1.02rem}
+  .dyno .chart{height:70px;margin:.55rem 0}
+}
