@@ -35,6 +35,7 @@ type View =
   | "debug"
   | "display";
 type InstallPromptEvent = Event & { prompt: () => Promise<void>; userChoice: Promise<{ outcome: "accepted" | "dismissed" }> };
+type ScreenLock = { release: () => Promise<void>; released: boolean };
 const fmt = (n: number | null, u = "W") =>
   n === null ? "--" : `${Math.round(n)} ${u}`;
 const powerLevel = (w: number) =>
@@ -65,6 +66,7 @@ export function App() {
     [sessions, setSessions] = useState<DynoSession[]>([]),
     [count, setCount] = useState(3),
     [notice, setNotice] = useState(""),
+    [wakeActive, setWakeActive] = useState(false),
     [installPrompt, setInstallPrompt] = useState<InstallPromptEvent>(),
     [riderWeight, setRiderWeight] = useState(""),
     [vehicle, setVehicle] = useState<VehicleProfile>("velomobile"),
@@ -78,11 +80,18 @@ export function App() {
     riderNameRef = useRef(""),
     riderWeightRef = useRef(70),
     lastPowerPaint = useRef(0),
-    lastSpeedPaint = useRef(0);
+    lastSpeedPaint = useRef(0),
+    wakeLockRef = useRef<ScreenLock>(),
+    sessionActiveRef = useRef(false);
   pRef.current = provider;
   useEffect(() => {
     sessionRepo.settings(defaults).then(setSettings);
     sessionRepo.getAll().then(setSessions);
+  }, []);
+  useEffect(() => {
+    const resume = () => { if (document.visibilityState === "visible" && sessionActiveRef.current) void requestWakeLock(); };
+    document.addEventListener("visibilitychange", resume);
+    return () => document.removeEventListener("visibilitychange", resume);
   }, []);
   useEffect(() => {
     const capture = (event: Event) => { event.preventDefault(); setInstallPrompt(event as InstallPromptEvent); };
@@ -115,6 +124,17 @@ export function App() {
   function selectVehicle(next: VehicleProfile) {
     vehicleRef.current = next;
     setVehicle(next);
+  }
+  async function requestWakeLock() {
+    const api = (navigator as Navigator & { wakeLock?: { request: (type: "screen") => Promise<ScreenLock> } }).wakeLock;
+    if (!api || wakeLockRef.current?.released === false) return;
+    try { wakeLockRef.current = await api.request("screen"); setWakeActive(true); }
+    catch { setWakeActive(false); }
+  }
+  async function releaseWakeLock() {
+    if (wakeLockRef.current && !wakeLockRef.current.released) await wakeLockRef.current.release();
+    wakeLockRef.current = undefined;
+    setWakeActive(false);
   }
   async function installApp() {
     if (installPrompt) {
@@ -166,6 +186,8 @@ export function App() {
   function startSession() {
     start.current = performance.now();
     ended.current = false;
+    sessionActiveRef.current = true;
+    void requestWakeLock();
     setView("dyno");
     const course = challenges[challenge];
     try {
@@ -204,6 +226,8 @@ export function App() {
         if (course.distanceKm && distance >= course.distanceKm) finish(true);
       });
     } catch (e) {
+      sessionActiveRef.current = false;
+      void releaseWakeLock();
       setNotice(e instanceof Error ? e.message : "Provider error");
       setView("home");
       return;
@@ -222,6 +246,8 @@ export function App() {
   function finish(valid: boolean) {
     if (ended.current) return;
     ended.current = true;
+    sessionActiveRef.current = false;
+    void releaseWakeLock();
     if (timer.current) clearInterval(timer.current);
     pRef.current.stop();
     const data = sRef.current,
@@ -276,7 +302,7 @@ export function App() {
       <main className="dyno">
         <header>
           <span className="live">
-            ● {source.toUpperCase()} · {activeVehicle.label}
+            ● {source.toUpperCase()} · {activeVehicle.label}{wakeActive ? " · SCHERMO ON" : ""}
           </span>
           <b>
             {clock.toFixed(1)}
