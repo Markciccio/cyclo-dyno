@@ -10,7 +10,7 @@ import type {
 } from "./types";
 import { DemoPowerProvider } from "./services/demoProvider";
 import { AssiomaBluetoothProvider } from "./services/assiomaBluetooth";
-import { calculateVirtualSpeed } from "./logic/speed";
+import { advanceVirtualSpeed, trackGrade } from "./logic/speed";
 import { calculateMetrics, leaderboardSort } from "./logic/metrics";
 import { sessionRepo, download } from "./storage/repository";
 import { Gauge } from "./components/Gauge";
@@ -79,6 +79,8 @@ export function App() {
     isA = provider instanceof AssiomaBluetoothProvider,
     activeChallenge = challenges[challenge],
     activeVehicle = vehicles[vehicle];
+  const speedPeak = Math.max(0, ...samples.map((x) => x.virtualSpeedKmh));
+  const newSpeedPeak = !!live && samples.length > 1 && live.virtualSpeedKmh > Math.max(0, ...samples.slice(0, -1).map((x) => x.virtualSpeedKmh));
   const nav = (
     <nav>
       <button onClick={() => setView("home")}>HOME</button>
@@ -133,13 +135,17 @@ export function App() {
       pRef.current.start((x) => {
         if (ended.current) return;
         const prev = sRef.current.at(-1),
-          speed = calculateVirtualSpeed(
-            x.powerWatts,
-            settings.referenceWatts,
-            vehicles[vehicleRef.current].referenceKmh,
-          ),
           elapsed = x.timestamp - start.current,
           dt = prev ? x.timestamp - prev.timestamp : 0,
+          speed = advanceVirtualSpeed({
+            powerWatts: x.powerWatts,
+            previousKmh: prev?.virtualSpeedKmh ?? 0,
+            dtSeconds: dt / 1000,
+            referenceWatts: settings.referenceWatts,
+            referenceKmh: vehicles[vehicleRef.current].referenceKmh,
+            vehicle: vehicleRef.current,
+            grade: trackGrade(challenge, prev?.distanceKm ?? 0),
+          }),
           distance =
             (prev?.distanceKm ?? 0) +
             ((((prev?.virtualSpeedKmh ?? speed) + speed) / 2) * dt) / 3600000,
@@ -234,14 +240,20 @@ export function App() {
         <TrackMap challenge={challenge} progress={progress} elapsedSeconds={clock} vehicle={vehicle} onVehicleChange={selectVehicle} />
         {challenge === "dyno" && <VehicleControls vehicle={vehicle} onChange={selectVehicle} />}
         <section className="hero">
-          <label>POTENZA</label>
-          <strong
-            className={`power-readout ${powerLevel(live?.powerWatts ?? 0)}`}
-          >
-            {live?.powerWatts ?? 0}
-            <em> W</em>
-          </strong>
-          <Gauge power={live?.powerWatts ?? 0} range={750} />
+          <div className="hero-reading power-reading">
+            <label>POTENZA</label>
+            <strong className={`power-readout ${powerLevel(live?.powerWatts ?? 0)}`}>
+              {live?.powerWatts ?? 0}<em> W</em>
+            </strong>
+            <Gauge power={live?.powerWatts ?? 0} range={750} />
+          </div>
+          <div className="hero-reading speed-reading">
+            <label>VELOCITÀ</label>
+            <strong className={`speed-readout ${newSpeedPeak ? "speed-peak" : ""}`}>
+              {(live?.virtualSpeedKmh ?? 0).toFixed(1)}<em> km/h</em>
+            </strong>
+            <div className={`speed-scale ${newSpeedPeak ? "speed-extra" : ""}`}><div style={{width:`${Math.min(100,(live?.virtualSpeedKmh??0))}%`}}/>{newSpeedPeak&&<i>NUOVO PICCO · {speedPeak.toFixed(1)} km/h</i>}<span>0</span><b>100 km/h</b></div>
+          </div>
         </section>
         <section className="metrics">
           <Metric
@@ -250,8 +262,8 @@ export function App() {
           />
           <Metric n="CADENCE" v={`${live?.cadenceRpm ?? "--"} rpm`} />
           <Metric
-            n="VIRTUAL SPEED"
-            v={`${(live?.virtualSpeedKmh ?? 0).toFixed(1)} km/h`}
+            n="MAX SPEED"
+            v={`${speedPeak.toFixed(1)} km/h`}
           />
           <Metric
             n="DISTANCE"
