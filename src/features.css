@@ -264,15 +264,32 @@
 .satellite-track { height: 360px; }
 
 /* Il marker ruota secondo la rotta: il transform lo mette TrackMap sull'svg interno. */
-.vehicle-marker, .ghost-marker { background: transparent; border: 0; }
+/* Il marker e' un riquadro quadrato: anello e mezzo stanno entrambi al centro. */
+.vehicle-marker, .ghost-marker { background: transparent; border: 0; display: grid; place-items: center; }
+.vehicle-marker > *, .ghost-marker > * { grid-area: 1 / 1; }
 .topdown-vehicle {
-  width: 44px; height: 64px; display: block;
+  width: 52px; height: 74px; display: block;
   transform-origin: 50% 50%;
   transition: transform .18s linear;
-  filter: drop-shadow(0 2px 5px #000c);
+  filter: drop-shadow(0 1px 3px #000) drop-shadow(0 0 6px #000a);
 }
+/* Anello di individuazione: disco scuro traslucido piu' bordo acceso. */
+.marker-halo {
+  width: 68px; height: 68px; border-radius: 50%;
+  background: radial-gradient(closest-side, #0009, #00000059 62%, #0000);
+  border: 2px solid currentColor;
+  box-shadow: 0 0 9px currentColor, 0 0 3px #000 inset;
+  pointer-events: none;
+}
+.halo-rider { color: #d8ff22; animation: haloPulse 1.6s ease-in-out infinite; }
+.halo-rival { color: #29d7ff; }
+.halo-record { color: #e6ecf3; border-style: dashed; box-shadow: 0 0 6px #e6ecf380; }
+@keyframes haloPulse {
+  50% { box-shadow: 0 0 16px currentColor, 0 0 3px #000 inset; }
+}
+@media (prefers-reduced-motion: reduce) { .halo-rider { animation: none; } }
 /* Scocca e telaio: è l'unica tinta che il ghost ridipinge. */
-.tdv-body, .tdv-shell { fill: #ff7a1a; stroke: #2a1000; stroke-width: .7; }
+.tdv-body, .tdv-shell { fill: #ff8c1a; stroke: #1a0a00; stroke-width: .8; }
 .tdv-shell { stroke-width: 1; }
 .tdv-fairing { fill: #1a222b; stroke: #050a0f; stroke-width: .6; }
 .tdv-canopy { fill: #16222c; stroke: #0a1219; stroke-width: .8; opacity: .96; }
@@ -399,7 +416,8 @@
   .run-cell label { font-size: 8px; letter-spacing: .04em; }
   .run-cell b { font-size: .95rem; }
   .elevation-profile { height: 46px; }
-  .topdown-vehicle { width: 36px; height: 52px; }
+  .topdown-vehicle { width: 44px; height: 62px; }
+  .marker-halo { width: 54px; height: 54px; }
 }
 
 /* Su schermo stretto i pulsanti mezzo restano solo icona: va centrata. */
@@ -640,3 +658,119 @@
   .sector-flag { left: 8px; transform: none; bottom: 16px; }
   .track-outline { bottom: 40px; }
 }
+
+/* ===== correzioni desktop viste sulla mappa larga ===== */
+/* Il titolo partiva da sinistra e finiva sotto i comandi zoom. */
+.satellite-title { left: 56px; }
+/* La tabellina eredita da dl/dt/dd globali padding e bordi che la sfasciano. */
+.track-outline dl {
+  display: grid; grid-template-columns: 1fr 1fr; gap: .1rem .5rem;
+  border: 0; font-family: "DM Mono";
+}
+.track-outline dl > div { min-width: 0; }
+.track-outline dt, .track-outline dd { padding: 0; border: 0; }
+.track-outline dd { color: #dff8ff; white-space: nowrap; }
+
+/* ===== colonna destra: mezzi e, sotto, il menù ghost ===== */
+.map-side {
+  position: absolute; z-index: 600; right: 10px; top: 88px;
+  display: grid; gap: 6px; width: 132px; justify-items: stretch;
+}
+.map-side .vehicle-switch { position: static; width: auto; right: auto; top: auto; }
+/* Il menù apre verso sinistra: attaccato al bordo destro non ci sarebbe spazio. */
+.map-side .ghost-menu { position: relative; left: auto; bottom: auto; transform: none; }
+.map-side .ghost-menu > button {
+  width: 100%; display: grid; gap: 0; text-align: left; padding: .32rem .45rem;
+}
+.map-side .ghost-menu ul { left: auto; right: calc(100% + 6px); bottom: auto; top: 0; transform: none; }
+
+/* ===== pendenza in grande sulla mappa, come potenza e velocità ===== */
+.grade-hud {
+  position: absolute; z-index: 500; right: 12px; bottom: 26px;
+  text-align: right; font-family: "Barlow Condensed", Arial, sans-serif;
+  pointer-events: none;
+}
+.grade-hud label {
+  display: block; font-family: "DM Mono"; font-size: .6rem;
+  letter-spacing: .12em; color: #b7c2ce; text-shadow: 0 1px 3px #000;
+}
+.grade-hud strong {
+  display: block; font-size: clamp(3rem, 7vw, 5.5rem); line-height: .82;
+  letter-spacing: -.05em; transition: color .25s ease, text-shadow .25s ease;
+}
+.grade-hud em { font-size: .3em; font-style: normal; margin-left: .1em; }
+.grade-hud.grade-flat strong { color: #7ce8a4; text-shadow: 0 0 10px #19ff6a, 0 0 30px #0f8b43; }
+.grade-hud.grade-easy strong { color: #d8ff22; text-shadow: 0 0 12px #d8ff22, 0 0 34px #b2c800; }
+.grade-hud.grade-mid strong { color: #ffae30; text-shadow: 0 0 13px #ff7b16, 0 0 38px #d64700; }
+.grade-hud.grade-hard strong { color: #ff5a3c; text-shadow: 0 0 14px #ff1b1b, 0 0 40px #a30000; }
+.grade-hud.grade-wall strong {
+  color: #fff3a0; text-shadow: 0 0 10px #fff, 0 0 26px #ffca10, 0 0 60px #ff4415, 0 0 110px #e40000;
+  animation: hotPower .62s ease-in-out infinite alternate;
+}
+
+@media (max-width: 520px) {
+  .map-side { right: 4px; top: 54px; width: 32px; gap: 3px; }
+  .map-side .ghost-menu > button { padding: .25rem .1rem; place-items: center; text-align: center; }
+  .map-side .ghost-menu > button span { display: none; }
+  .map-side .ghost-menu ul { right: calc(100% + 4px); }
+  /* Liberato il centro in basso, la targhetta settore ci torna. */
+  .sector-flag { left: 50%; transform: translateX(-50%); }
+  .grade-hud { right: 6px; bottom: 20px; }
+  .grade-hud label { font-size: .5rem; }
+  .grade-hud strong { font-size: clamp(2.4rem, 13vw, 3.6rem); }
+}
+
+/* L'eccedenza sopra il fondoscala va vista anche sul telefono, ma dentro la
+   barra: fuori copriva il numero grande della potenza. */
+@media (max-width: 520px) {
+  .gauge-extra i {
+    display: block; position: absolute; right: .25rem; top: 50%;
+    transform: translateY(-50%); padding: .05rem .28rem;
+    font-size: .52rem; line-height: 1.3; animation: none;
+  }
+}
+
+/* I dati della striscia erano troppo piccoli per una lettura al volo pedalando. */
+.run-cell b { font-size: clamp(1.5rem, 4.2vw, 2.2rem); }
+.run-cell label { font-size: 11px; }
+.run-cell em { font-size: .4em; }
+.tone-remaining b { color: #ffd2e2; } .tone-remaining i { background: #c9457a; }
+@media (max-width: 520px) {
+  .run-cell b { font-size: 1.35rem; }
+  .run-cell label { font-size: 9px; }
+  .run-cell { padding: .32rem .4rem .5rem; }
+}
+
+/* ===== assetto finale della mappa ===== */
+/* Su desktop la colonna destra ha bisogno di altezza: prima sforava il riquadro. */
+.satellite-track { height: 460px; }
+.map-side .vehicle-switch button { padding: .3rem .38rem; line-height: 1.15; }
+.map-side .vehicle-switch small { font-size: .52rem; }
+/* La pendenza si sposta a sinistra della colonna dei mezzi, che la copriva. */
+.grade-hud { right: 152px; }
+
+/* I comandi zoom servono anche sul telefono: la mappa è ravvicinata e a volte
+   si vuole allargare per capire dove si è. */
+.satellite-map .leaflet-control-zoom { display: block; }
+.satellite-map .leaflet-control-zoom a {
+  width: 26px; height: 26px; line-height: 26px;
+  background: #091016dd; color: #dff8ff; border: 1px solid #35404a; font-size: 15px;
+}
+.satellite-map .leaflet-control-zoom a:hover { background: #12202b; color: #fff; }
+.satellite-map .leaflet-top.leaflet-left { margin: 2px; }
+
+/* Su schermo largo i numeroni facevano scorrere la pagina inutilmente. */
+@media (min-width: 900px) {
+  .hero .power-readout, .hero .speed-readout { font-size: clamp(4rem, 10vw, 8.5rem); }
+  .dyno .hero { margin: 1.2rem auto .6rem; }
+}
+
+@media (max-width: 520px) {
+  /* La tabellina non ci sta nel riquadrino: restano nome e sagoma. */
+  .track-outline dl { display: none; }
+  .grade-hud { right: 6px; }
+  /* Lo zoom sta in alto a sinistra, dove il titolo è nascosto. */
+  .satellite-map .leaflet-control-zoom a { width: 24px; height: 24px; line-height: 24px; font-size: 14px; }
+}
+.tone-grade-flat b { color: #7ce8a4; } .tone-grade-flat i { background: #2b9f5e; }
+.tone-grade-wall b { color: #fff3a0; } .tone-grade-wall i { background: #e40000; }

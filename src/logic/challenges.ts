@@ -68,10 +68,16 @@ export interface ChallengeSpec {
   elevationGain?: number;
   /** Un anello si ripete a giri, un punto-a-punto finisce all'arrivo. */
   lap: boolean;
+  /**
+   * Fondoscala del misuratore di potenza. Sulle prove lunghe si sta sotto i
+   * 500 W anche nei rilanci: con la scala dello sprint l'ago non si muove e
+   * non si legge nulla. Quello che sfora resta indicato come extra.
+   */
+  powerRangeWatts: number;
   description: string;
 }
 
-function fromTrack(id: ChallengeId, label: string, note: string): ChallengeSpec {
+function fromTrack(id: ChallengeId, label: string, note: string, powerRangeWatts = 750): ChallengeSpec {
   const track = getTrack(id as Parameters<typeof getTrack>[0]);
   const km = track.lengthMeters / 1000;
   const climb = Math.round(track.totalClimb);
@@ -80,15 +86,16 @@ function fromTrack(id: ChallengeId, label: string, note: string): ChallengeSpec 
     distanceKm: km,
     elevationGain: climb > 150 ? climb : undefined,
     lap: track.closed,
+    powerRangeWatts,
     description: note,
   };
 }
 
 export const challenges: Record<ChallengeId, ChallengeSpec> = {
-  dyno: { label: "DYNO SPRINT", lap: false, description: "Prova a tempo" },
+  dyno: { label: "DYNO SPRINT", lap: false, powerRangeWatts: 750, description: "Prova a tempo" },
   monza: fromTrack("monza", "MONZA LAP", "1 giro · 5,794 km · 11 curve"),
-  velodrome: fromTrack("velodrome", "VELODROMO", "1 giro · 400 m"),
-  mottarone: fromTrack("mottarone", "MOTTARONE", "Armeno → vetta · 11,7 km · 7,7%"),
+  velodrome: fromTrack("velodrome", "VELODROMO", "1 giro · 400 m", 500),
+  mottarone: fromTrack("mottarone", "MOTTARONE", "Armeno → vetta · 11,7 km · 7,7%", 500),
 };
 
 /** Settori del giro di Monza, dalle distanze reali delle way OSM. */

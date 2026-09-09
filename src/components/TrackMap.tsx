@@ -8,13 +8,41 @@ import { getTrack, hasTrack, sampleTrack } from "../logic/tracks";
 import { VehicleIcon, vehicleTopDownSvg } from "./VehicleIcon";
 import { TrackOutline } from "./TrackOutline";
 
+/** Anello di individuazione dietro al mezzo: su una foto satellitare la sagoma da sola sparisce. */
+const markerHtml = (vehicle: VehicleProfile, kind: string) =>
+  `<span class="marker-halo halo-${kind}"></span>${vehicleTopDownSvg(vehicle)}`;
+/** L'anello non deve girare, quindi la rotazione va cercata sul solo svg. */
+const spin = (marker: L.Marker | undefined, bearing: number) => {
+  const svg = marker?.getElement()?.querySelector<HTMLElement>(".topdown-vehicle");
+  if (svg) svg.style.transform = `rotate(${bearing}deg)`;
+};
+
 const labels: Record<string, string> = {
   monza: "AUTODROMO DI MONZA",
   velodrome: "GATTICO · ANELLO 400 M",
   mottarone: "MOTTARONE · SALITA DA ARMENO",
 };
-/** Zoom di inseguimento: stretto sull'anello corto, largo sulla salita. */
-const followZoom: Record<string, number> = { monza: 17, velodrome: 18, mottarone: 16 };
+/** Metri di strada che si vogliono vedere attorno al mezzo mentre si corre. */
+const FOLLOW_SPAN_METERS = 55;
+/** Oltre questo livello Esri non ha piastrelle native e le ingrandisce. */
+const MAX_ZOOM = 20;
+
+/**
+ * Zoom che inquadra la porzione di strada voluta. Va calcolato sulle dimensioni
+ * vere del contenitore: un livello fisso mostra 90 m sul telefono e 300 sul
+ * desktop, cioè due inquadrature diverse.
+ */
+function zoomForSpan(map: L.Map, lat: number, meters: number) {
+  const size = map.getSize();
+  const side = Math.max(120, Math.min(size.x, size.y));
+  const metresPerPixel = meters / side;
+  const equator = 156543.03392 * Math.cos((lat * Math.PI) / 180);
+  return Math.max(14, Math.min(MAX_ZOOM, Math.log2(equator / metresPerPixel)));
+}
+
+/** Fascia di colore della pendenza: stessa logica dei livelli di potenza. */
+const gradeTone = (percent: number) =>
+  percent < 2 ? "grade-flat" : percent < 5 ? "grade-easy" : percent < 8 ? "grade-mid" : percent < 11 ? "grade-hard" : "grade-wall";
 
 export function TrackMap({
   challenge,
@@ -26,6 +54,7 @@ export function TrackMap({
   ghostVehicle,
   ghostName,
   bestLabel,
+  gradePercent,
   onGhostChange,
   running,
 }: {
@@ -41,6 +70,8 @@ export function TrackMap({
   ghostVehicle: VehicleProfile;
   ghostName: string;
   bestLabel?: string;
+  /** Pendenza sotto le ruote, in percento: mostrata in grande sui percorsi che salgono. */
+  gradePercent?: number;
   onGhostChange: (choice: GhostChoice) => void;
   running: boolean;
 }) {
@@ -62,7 +93,8 @@ export function TrackMap({
     });
     L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", {
       attribution: "Tiles © Esri · percorso © OpenStreetMap",
-      maxZoom: 19,
+      maxZoom: MAX_ZOOM,
+      maxNativeZoom: 19,
     }).addTo(instance);
     // Doppio tratto: alone scuro sotto, linea accesa sopra, così si stacca dal satellite.
     L.polyline(line, { color: "#001018", weight: 9, opacity: 0.55, lineJoin: "round" }).addTo(instance);
@@ -93,7 +125,7 @@ export function TrackMap({
     marker.current?.remove();
     marker.current = L.marker([track.points[0].lat, track.points[0].lon], {
       zIndexOffset: 500,
-      icon: L.divIcon({ className: "vehicle-marker", html: vehicleTopDownSvg(vehicle), iconSize: [44, 64], iconAnchor: [22, 32] }),
+      icon: L.divIcon({ className: "vehicle-marker", html: markerHtml(vehicle, "rider"), iconSize: [76, 76], iconAnchor: [38, 38] }),
     }).addTo(map.current);
   }, [vehicle, track]);
 
@@ -102,7 +134,12 @@ export function TrackMap({
     ghostMarker.current?.remove();
     ghostMarker.current = L.marker([track.points[0].lat, track.points[0].lon], {
       zIndexOffset: 400,
-      icon: L.divIcon({ className: `ghost-marker ${ghost === "best" ? "record" : "rival"}`, html: vehicleTopDownSvg(ghostVehicle), iconSize: [44, 64], iconAnchor: [22, 32] }),
+      icon: L.divIcon({
+        className: `ghost-marker ${ghost === "best" ? "record" : "rival"}`,
+        html: markerHtml(ghostVehicle, ghost === "best" ? "record" : "rival"),
+        iconSize: [76, 76],
+        iconAnchor: [38, 38],
+      }),
     }).addTo(map.current);
     return () => {
       ghostMarker.current?.remove();
@@ -114,8 +151,7 @@ export function TrackMap({
   useEffect(() => {
     if (!marker.current || !track || !here) return;
     marker.current.setLatLng([here.lat, here.lon]);
-    const svg = marker.current.getElement()?.firstElementChild as HTMLElement | undefined;
-    if (svg) svg.style.transform = `rotate(${here.bearing}deg)`;
+    spin(marker.current, here.bearing);
     if (running) map.current?.setView([here.lat, here.lon], map.current.getZoom(), { animate: false });
   }, [here?.lat, here?.lon, here?.bearing, running, track]);
 
@@ -123,14 +159,13 @@ export function TrackMap({
     if (!ghostMarker.current || !track || ghostMeters === undefined) return;
     const point = sampleTrack(track, ghostMeters);
     ghostMarker.current.setLatLng([point.lat, point.lon]);
-    const svg = ghostMarker.current.getElement()?.firstElementChild as HTMLElement | undefined;
-    if (svg) svg.style.transform = `rotate(${point.bearing}deg)`;
+    spin(ghostMarker.current, point.bearing);
   }, [ghostMeters, track]);
 
   // All'avvio si stringe sul mezzo, alla fine si torna a inquadrare tutto il percorso.
   useEffect(() => {
     if (!map.current || !track) return;
-    if (running && here) map.current.setView([here.lat, here.lon], followZoom[track.id] ?? 17, { animate: true });
+    if (running && here) map.current.setView([here.lat, here.lon], zoomForSpan(map.current, here.lat, FOLLOW_SPAN_METERS), { animate: true });
     else map.current.fitBounds(L.latLngBounds(track.points.map((p) => [p.lat, p.lon] as L.LatLngExpression)), { padding: [24, 24] });
     // Solo il passaggio fermo/in corsa deve reinquadrare, non ogni spostamento.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -140,6 +175,8 @@ export function TrackMap({
   const progress = track.closed ? (meters % track.lengthMeters) / track.lengthMeters : meters / track.lengthMeters;
   const sector = sectorName(challenge, meters % track.lengthMeters);
   const gap = ghostMeters === undefined ? undefined : meters - ghostMeters;
+  // Su un anello pianeggiante la pendenza oscilla attorno allo zero e non dice nulla.
+  const climbs = track.totalClimb > 150;
 
   return (
     <section className="satellite-track">
@@ -170,9 +207,19 @@ export function TrackMap({
             <small>{gap >= 0 ? "sei davanti" : "sei dietro"}</small>
           </div>
         )}
-        <GhostMenu choice={ghost} onChange={onGhostChange} bestLabel={bestLabel} vehicle={vehicle} />
+        {climbs && (
+          <div className={`grade-hud ${gradeTone(gradePercent ?? 0)}`}>
+            <label>PENDENZA</label>
+            <strong>
+              {(gradePercent ?? 0) >= 0 ? "+" : "−"}
+              {Math.abs(gradePercent ?? 0).toFixed(1)}
+              <em>%</em>
+            </strong>
+          </div>
+        )}
       </div>
-      <aside className="vehicle-switch">
+      <aside className="map-side">
+        <div className="vehicle-switch">
         {(Object.keys(vehicles) as VehicleProfile[]).map((id) => (
           <button onClick={() => onVehicleChange(id)} className={vehicle === id ? "active" : ""} key={id}>
             <VehicleIcon vehicle={id} />
@@ -184,7 +231,9 @@ export function TrackMap({
               Crr <b>{vehicles[id].crr.toFixed(4).replace(".", ",")}</b>
             </small>
           </button>
-        ))}
+          ))}
+        </div>
+        <GhostMenu choice={ghost} onChange={onGhostChange} bestLabel={bestLabel} vehicle={vehicle} />
       </aside>
       <p className="satellite-note">Satellite © Esri · tracciato © OpenStreetMap · mezzo simulato: {vehicles[vehicle].label}</p>
     </section>

@@ -361,6 +361,7 @@ export function App() {
     const metersDone = (live?.distanceKm ?? 0) * 1000;
     const liveTrack = challengeTrack(challenge);
     const gradePercent = live?.gradePercent ?? 0;
+    const climbed = liveTrack ? sampleTrack(liveTrack, metersDone).climb : 0;
     const record = bestOnTrack(sessions, challenge);
     const ghostMeters =
       ghost === "none"
@@ -391,6 +392,7 @@ export function App() {
           ghostVehicle={ghost === "best" ? (record?.vehicle ?? "velomobile") : ghost === "none" ? vehicle : ghost}
           ghostName={ghostLabel(ghost, record)}
           bestLabel={record ? `${record.participantName} · ${formatLapTime(record.elapsedSeconds ?? 0)}` : undefined}
+          gradePercent={gradePercent}
           onGhostChange={selectGhost}
           running
         />
@@ -401,7 +403,7 @@ export function App() {
             <strong className={`power-readout ${powerLevel(displayPower)}`}>
               {displayPower}<em> W</em>
             </strong>
-            <Gauge power={displayPower} range={750} />
+            <Gauge power={displayPower} range={activeChallenge.powerRangeWatts} />
           </div>
           <div className="hero-reading speed-reading">
             <label>VELOCITÀ</label>
@@ -414,7 +416,7 @@ export function App() {
         </section>
         {liveTrack && (
           <section className="run-strip">
-            <Bar n="POTENZA" v={`${displayPower}`} u="W" fill={displayPower / 800} tone="power" />
+            <Bar n="POTENZA" v={`${displayPower}`} u="W" fill={displayPower / activeChallenge.powerRangeWatts} tone="power" />
             <Bar n="VELOCITÀ" v={displaySpeed.toFixed(1)} u="km/h" fill={displaySpeed / 100} tone="speed" />
             <Bar n="CADENZA" v={`${live?.cadenceRpm ?? "--"}`} u="rpm" fill={(live?.cadenceRpm ?? 0) / 150} tone="cadence" />
             <Bar
@@ -422,7 +424,7 @@ export function App() {
               v={`${gradePercent >= 0 ? "+" : ""}${gradePercent.toFixed(1)}`}
               u="%"
               fill={Math.abs(gradePercent) / 15}
-              tone={gradePercent >= 8 ? "grade-hard" : gradePercent >= 3 ? "grade-mid" : "grade-easy"}
+              tone={gradeStripTone(gradePercent)}
             />
             <Bar
               n="DISTANZA"
@@ -432,17 +434,32 @@ export function App() {
               tone="distance"
             />
             {liveTrack.totalClimb > 150 && (
-              <Bar
-                n="DISLIVELLO"
-                v={`${Math.round(sampleTrack(liveTrack, metersDone).climb)}`}
-                u={`/ ${Math.round(liveTrack.totalClimb)} m`}
-                fill={sampleTrack(liveTrack, metersDone).climb / liveTrack.totalClimb}
-                tone="climb"
-              />
+              <>
+                <Bar
+                  n="DISLIVELLO"
+                  v={`${Math.round(climbed)}`}
+                  u={`/ ${Math.round(liveTrack.totalClimb)} m`}
+                  fill={climbed / liveTrack.totalClimb}
+                  tone="climb"
+                />
+                <Bar
+                  n="RESIDUO"
+                  v={`${Math.round(Math.max(0, liveTrack.totalClimb - climbed))}`}
+                  u="m D+"
+                  fill={Math.max(0, liveTrack.totalClimb - climbed) / liveTrack.totalClimb}
+                  tone="remaining"
+                />
+              </>
             )}
           </section>
         )}
-        {liveTrack && <ElevationProfile track={liveTrack} meters={metersDone} />}
+        {liveTrack && (
+          <ElevationProfile
+            track={liveTrack}
+            meters={metersDone}
+            windowMeters={liveTrack.totalClimb > 150 ? 1000 : undefined}
+          />
+        )}
         <section className="metrics">
           <Metric
             n="PEAK"
@@ -758,6 +775,9 @@ function Metric({ n, v }: { n: string; v: string }) {
     </div>
   );
 }
+/** Stesse soglie del riquadro pendenza sulla mappa: due scale diverse confondono. */
+const gradeStripTone = (percent: number) =>
+  percent < 2 ? "grade-flat" : percent < 5 ? "grade-easy" : percent < 8 ? "grade-mid" : percent < 11 ? "grade-hard" : "grade-wall";
 function Bar({ n, v, u, fill, tone }: { n: string; v: string; u: string; fill: number; tone: string }) {
   return (
     <div className={`run-cell tone-${tone}`}>
