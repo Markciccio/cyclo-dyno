@@ -93,7 +93,7 @@ export function TrackMap({
     marker.current?.remove();
     marker.current = L.marker([track.points[0].lat, track.points[0].lon], {
       zIndexOffset: 500,
-      icon: L.divIcon({ className: "vehicle-marker", html: vehicleTopDownSvg(vehicle), iconSize: [40, 44], iconAnchor: [20, 22] }),
+      icon: L.divIcon({ className: "vehicle-marker", html: vehicleTopDownSvg(vehicle), iconSize: [44, 64], iconAnchor: [22, 32] }),
     }).addTo(map.current);
   }, [vehicle, track]);
 
@@ -102,7 +102,7 @@ export function TrackMap({
     ghostMarker.current?.remove();
     ghostMarker.current = L.marker([track.points[0].lat, track.points[0].lon], {
       zIndexOffset: 400,
-      icon: L.divIcon({ className: `ghost-marker ${ghost === "best" ? "record" : "rival"}`, html: vehicleTopDownSvg(ghostVehicle), iconSize: [40, 44], iconAnchor: [20, 22] }),
+      icon: L.divIcon({ className: `ghost-marker ${ghost === "best" ? "record" : "rival"}`, html: vehicleTopDownSvg(ghostVehicle), iconSize: [44, 64], iconAnchor: [22, 32] }),
     }).addTo(map.current);
     return () => {
       ghostMarker.current?.remove();
