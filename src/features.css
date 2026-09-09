@@ -971,3 +971,40 @@
   @keyframes lapIn { from { opacity: 0; transform: translateY(-14px) scale(.97); } }
   @keyframes lapOut { to { opacity: 0; transform: translateY(-8px); } }
 }
+
+/* ===== quadro dati unico: font più grandi, niente doppioni ===== */
+.run-cell b { font-size: clamp(1.9rem, 5vw, 2.8rem); }
+.run-cell label { font-size: 12px; letter-spacing: .1em; }
+.run-cell em { font-size: .36em; }
+.run-cell { padding: .55rem .6rem .7rem; }
+
+/* Dislivello residuo, sopra la percentuale di pendenza a bordo mappa. */
+.climb-left { font-family: "Barlow Condensed", Arial, sans-serif; text-align: right; }
+.climb-left label {
+  display: block; font-family: "DM Mono"; font-size: .55rem;
+  letter-spacing: .12em; color: #b7c2ce; text-shadow: 0 1px 3px #000;
+}
+.climb-left strong {
+  display: block; font-size: clamp(1.7rem, 3.8vw, 2.8rem); line-height: .86;
+  letter-spacing: -.04em; color: #ffa8c4; text-shadow: 0 0 10px #ff5c8a, 0 0 26px #a3003a;
+}
+.climb-left em { font-size: .34em; font-style: normal; margin-left: .1em; }
+
+@media (max-width: 520px) {
+  .run-cell b { font-size: 1.7rem; }
+  .run-cell label { font-size: 10px; letter-spacing: .05em; }
+  .run-cell { padding: .4rem .45rem .55rem; }
+  .climb-left label { font-size: .46rem; }
+  .climb-left strong { font-size: 1.3rem; }
+}
+
+/* Le celle di potenza e velocità ora sono i picchi, non i valori vivi:
+   la vecchia regola che le nascondeva sul telefono le avrebbe fatte sparire. */
+@media (max-width: 520px) {
+  .run-strip .tone-power, .run-strip .tone-speed { display: block; }
+}
+/* Cinque celle: si distribuiscono da sole invece di lasciare un buco. */
+.run-strip { grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); }
+@media (max-width: 520px) {
+  .run-strip { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}

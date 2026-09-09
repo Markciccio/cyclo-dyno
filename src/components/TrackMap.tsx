@@ -55,6 +55,7 @@ export function TrackMap({
   ghostName,
   bestLabel,
   gradePercent,
+  remainingClimb,
   rivalSeconds,
   bestSeconds,
   onGhostChange,
@@ -74,6 +75,8 @@ export function TrackMap({
   bestLabel?: string;
   /** Pendenza sotto le ruote, in percento: mostrata in grande sui percorsi che salgono. */
   gradePercent?: number;
+  /** Dislivello che manca alla vetta, in metri: assente sui percorsi piatti. */
+  remainingClimb?: number;
   /** Secondi di vantaggio (negativi) o ritardo sullo sfidante a pari watt. */
   rivalSeconds?: number;
   /** Secondi rispetto al miglior giro registrato sul tracciato. */
@@ -216,6 +219,15 @@ export function TrackMap({
         <div className="map-hud">
           {rivalSeconds !== undefined && <Delta n={`GHOST · ${vehicles[ghostVehicle].label}`} seconds={rivalSeconds} />}
           {bestSeconds !== undefined && <Delta n="IL TUO RECORD" seconds={bestSeconds} />}
+          {remainingClimb !== undefined && (
+            <div className="climb-left">
+              <label>RESIDUO</label>
+              <strong>
+                {Math.round(remainingClimb)}
+                <em>m D+</em>
+              </strong>
+            </div>
+          )}
           {climbs && (
             <div className={`grade-hud ${gradeTone(gradePercent ?? 0)}`}>
               <label>PENDENZA</label>

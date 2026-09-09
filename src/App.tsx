@@ -477,6 +477,7 @@ export function App() {
           ghostName={ghostLabel(ghost, record)}
           bestLabel={record ? `${record.participantName} · ${formatLapTime(record.elapsedSeconds ?? 0)}` : undefined}
           gradePercent={gradePercent}
+          remainingClimb={liveTrack && liveTrack.totalClimb > 150 ? Math.max(0, liveTrack.totalClimb - climbed) : undefined}
           rivalSeconds={rivalSeconds}
           bestSeconds={bestSeconds}
           onGhostChange={selectGhost}
@@ -560,16 +561,11 @@ export function App() {
         )}
         {liveTrack && (
           <section className="run-strip">
-            <Bar n="POTENZA" v={`${displayPower}`} u="W" fill={displayPower / activeChallenge.powerRangeWatts} tone="power" />
-            <Bar n="VELOCITÀ" v={displaySpeed.toFixed(1)} u="km/h" fill={displaySpeed / 100} tone="speed" />
+            {/* Un solo quadro dati: potenza e velocità sono già enormi qui sopra,
+                la pendenza e il residuo stanno sulla mappa. */}
+            <Bar n="PICCO POTENZA" v={`${Math.round(peakPower)}`} u="W" fill={peakPower / activeChallenge.powerRangeWatts} tone="power" />
             <Bar n="CADENZA" v={`${live?.cadenceRpm ?? "--"}`} u="rpm" fill={(live?.cadenceRpm ?? 0) / 150} tone="cadence" />
-            <Bar
-              n="PENDENZA"
-              v={`${gradePercent >= 0 ? "+" : ""}${gradePercent.toFixed(1)}`}
-              u="%"
-              fill={Math.abs(gradePercent) / 15}
-              tone={gradeStripTone(gradePercent)}
-            />
+            <Bar n="PICCO VELOCITÀ" v={speedPeak.toFixed(1)} u="km/h" fill={speedPeak / 100} tone="speed" />
             <Bar
               n="DISTANZA"
               v={(metersDone / 1000).toFixed(2)}
@@ -577,23 +573,23 @@ export function App() {
               fill={metersDone / liveTrack.lengthMeters}
               tone="distance"
             />
-            {liveTrack.totalClimb > 150 && (
-              <>
-                <Bar
-                  n="DISLIVELLO"
-                  v={`${Math.round(climbed)}`}
-                  u={`/ ${Math.round(liveTrack.totalClimb)} m`}
-                  fill={climbed / liveTrack.totalClimb}
-                  tone="climb"
-                />
-                <Bar
-                  n="RESIDUO"
-                  v={`${Math.round(Math.max(0, liveTrack.totalClimb - climbed))}`}
-                  u="m D+"
-                  fill={Math.max(0, liveTrack.totalClimb - climbed) / liveTrack.totalClimb}
-                  tone="remaining"
-                />
-              </>
+            {liveTrack.totalClimb > 150 ? (
+              <Bar
+                n="DISLIVELLO"
+                v={`${Math.round(climbed)}`}
+                u={`/ ${Math.round(liveTrack.totalClimb)} m`}
+                fill={climbed / liveTrack.totalClimb}
+                tone="climb"
+              />
+            ) : (
+              // Su un anello piatto la mappa non mostra la pendenza: qui serve ancora.
+              <Bar
+                n="PENDENZA"
+                v={`${gradePercent >= 0 ? "+" : ""}${gradePercent.toFixed(1)}`}
+                u="%"
+                fill={Math.abs(gradePercent) / 15}
+                tone={gradeStripTone(gradePercent)}
+              />
             )}
           </section>
         )}
@@ -604,17 +600,7 @@ export function App() {
             windowMeters={liveTrack.totalClimb > 150 ? 1000 : undefined}
           />
         )}
-        {!isSprint && (
-          <>
-            <section className="metrics">
-              <Metric n="PICCO POTENZA" v={`${Math.round(peakPower)} W`} />
-              <Metric n="CADENZA" v={`${live?.cadenceRpm ?? "--"} rpm`} />
-              <Metric n="PICCO VELOCITÀ" v={`${speedPeak.toFixed(1)} km/h`} />
-              <Metric n="DISTANZA" v={`${metersDone.toFixed(0)} m`} />
-            </section>
-            <PowerChart samples={samples} />
-          </>
-        )}
+        {!isSprint && <PowerChart samples={samples} />}
         <button className="danger" onClick={() => finish(activeChallenge.lap && laps.length > 0)}>
           {activeChallenge.lap && laps.length > 0 ? "TERMINA SESSIONE" : "STOP / INVALIDA"}
         </button>
