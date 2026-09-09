@@ -18,8 +18,10 @@ export function formatLapTime(seconds:number){const m=Math.floor(seconds/60);con
 export function rankFor(sessions:DynoSession[],challenge:ChallengeId){
   const scoped=sessions.filter(x=>(x.challenge??'dyno')===challenge)
   if(challenge==='dyno')return leaderboardSort(scoped)
+  // Su un anello vince il miglior giro, su un punto-a-punto il tempo totale.
+  const score=(x:DynoSession)=>x.bestLapSeconds??x.elapsedSeconds??Infinity
   return [...scoped].sort((a,b)=>
     Number(!!b.completed)-Number(!!a.completed)||
-    (a.elapsedSeconds??Infinity)-(b.elapsedSeconds??Infinity)||
+    score(a)-score(b)||
     b.timestamp-a.timestamp)
 }

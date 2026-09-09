@@ -30,6 +30,12 @@ Il pulsante **GHOST**, sotto i quattro mezzi nella colonna di destra, apre un mi
 
 Ogni mezzo ha CdA, Crr e accelerazione laterale sostenibile propri (`src/logic/challenges.ts`). La velocità in curva è limitata dalla curvatura del tracciato e la frenata è propagata all'indietro, così si rallenta prima della curva. La taratura è ancorata a rilievi reali in pista con il velomobile: prima variante 38 km/h al limite, Roggia e Ascari sopra i 50 in pieno. Su questi valori il giro simulato a 234 W esce intorno ai 380 s contro i 355 s del record reale: il modello resta un po' conservativo, e il parametro da ritoccare per avvicinarlo è `lateralG`.
 
+## Giri e sprint
+
+Monza e il velodromo non hanno un limite di giri: si continua a girare finché non si termina la sessione. Alla chiusura di ogni giro compare per qualche secondo un riquadro con tempo, velocità media e massima, potenza media e massima, e la posizione del giro nella sessione — record di giornata, secondo più veloce, e così via. Salvando, la sessione conserva tutti i giri e il tempo del migliore, ed è su quello che la classifica dell'anello ordina: una sessione da dieci giri non batte una da uno solo per il fatto di essere durata di più.
+
+Il **dyno sprint** ha una schermata sua: potenza istantanea e best 5 secondi affiancati in grande, la velocità sotto, il grafico di potenza che riempie lo spazio rimasto, e in fondo picco di potenza, cadenza, picco di cadenza e picco di velocità. Ogni nuovo record di potenza fa esplodere un annuncio al centro, più grosso ancora quando si sfonda un centinaio di watt.
+
 ## BLE e metriche
 
 Il provider usa il Cycling Power Service `0x1818` e Cycling Power Measurement `0x2A63`. La cadenza viene calcolata soltanto se sono presenti gli standard crank revolution data. Medie e finestre Best 1/5/10 s sono pesate sui timestamp. Ogni sessione registra la sfida a cui appartiene e la classifica è separata per sfida: il dyno sprint è ordinato per Best 5s, le prove a percorso per tempo, con i non completati in fondo. La prova sul Pixel con Assioma reale resta necessaria.

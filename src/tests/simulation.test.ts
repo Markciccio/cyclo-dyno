@@ -4,7 +4,8 @@ import { cornerLimitKmh, getTrack, sampleTrack } from "../logic/tracks"
 import { challenges, monzaGhost, totalMassKg, vehicles } from "../logic/challenges"
 import { rankFor } from "../logic/metrics"
 import type { DynoSession } from "../types"
-import { bestOnTrack, ghostLabel, isVehicleGhost, recordMetersAt } from "../logic/ghost"
+import { bestLap, lapRank, rankLabel, summariseLap } from "../logic/laps"
+import { bestOnTrack, ghostLabel, isVehicleGhost, recordMetersAt, recordSecondsAt } from "../logic/ghost"
 
 const rider = 70
 const mass = (id: keyof typeof vehicles) => totalMassKg(rider, id)
@@ -267,9 +268,74 @@ describe("scelta del ghost", () => {
     expect(bestOnTrack([dnf], "monza")).toBeUndefined()
   })
 
+  it("ricava il secondo in cui il record era a una certa distanza", () => {
+    // Il record fa 2 km nei primi 100 s, poi 3,794 km nei 300 successivi.
+    expect(recordSecondsAt(record, 0)).toBe(0)
+    expect(recordSecondsAt(record, 1000)).toBeCloseTo(50, 0)
+    expect(recordSecondsAt(record, 2000)).toBeCloseTo(100, 0)
+    expect(recordSecondsAt(record, 3897)).toBeCloseTo(250, 0)
+  })
+
+  it("è l'inverso esatto di recordMetersAt", () => {
+    for (const seconds of [20, 90, 180, 340]) {
+      expect(recordSecondsAt(record, recordMetersAt(record, seconds))).toBeCloseTo(seconds, 1)
+    }
+  })
+
+  it("non esce dai capi della registrazione", () => {
+    expect(recordSecondsAt(record, -100)).toBe(0)
+    expect(recordSecondsAt(record, 999999)).toBeCloseTo(400, 0)
+  })
+
   it("etichetta il ghost secondo la scelta", () => {
     expect(ghostLabel("none")).toBe("")
     expect(ghostLabel("road")).toContain("STESSI WATT")
     expect(ghostLabel("best", record)).toContain("PB")
+  })
+})
+
+describe("giri su anello", () => {
+  const samples = Array.from({ length: 11 }, (_, i) => ({
+    timestamp: i * 1000, elapsedMs: i * 1000, powerWatts: 200 + i * 20,
+    virtualSpeedKmh: 40 + i, distanceKm: i * 0.05,
+  }))
+
+  it("riassume il giro con tempo, medie e massimi", () => {
+    const lap = summariseLap({ samples, fromMs: 0, toMs: 10000, fromKm: 0, toKm: 0.5, index: 1 })
+    expect(lap.seconds).toBe(10)
+    expect(lap.distanceKm).toBeCloseTo(0.5, 3)
+    expect(lap.averageKmh).toBeCloseTo(180, 0)
+    expect(lap.maxKmh).toBe(50)
+    expect(lap.maxWatts).toBe(400)
+    // Media pesata sui 10 intervalli da 1 s: 200..380, cioè 290 W.
+    expect(lap.averageWatts).toBeCloseTo(290, 0)
+  })
+
+  it("considera solo i campioni dentro la finestra del giro", () => {
+    const lap = summariseLap({ samples, fromMs: 5000, toMs: 10000, fromKm: 0.25, toKm: 0.5, index: 2 })
+    expect(lap.maxWatts).toBe(400)
+    expect(lap.averageWatts).toBeGreaterThan(300)
+    expect(lap.seconds).toBe(5)
+  })
+
+  it("classifica il giro fra quelli già chiusi", () => {
+    const laps = [90, 84, 96].map((seconds, i) => ({ ...summariseLap({ samples, fromMs: 0, toMs: seconds * 1000, fromKm: 0, toKm: 0.5, index: i + 1 }), seconds }))
+    expect(lapRank(84, laps)).toBe(1)
+    expect(lapRank(90, laps)).toBe(2)
+    expect(lapRank(96, laps)).toBe(3)
+    expect(bestLap(laps)?.seconds).toBe(84)
+  })
+
+  it("annuncia il primo giro senza spacciarlo per record", () => {
+    expect(rankLabel(1, 1)).toBe("PRIMO GIRO")
+    expect(rankLabel(1, 3)).toContain("RECORD")
+    expect(rankLabel(2, 3)).toContain("2º")
+  })
+
+  it("in classifica un anello si giudica sul giro migliore, non sul totale", () => {
+    const base = { peakPower: 0, best1s: null, best10s: null, averagePower: 0, maxVirtualSpeed: 0, averageCadence: null, maxCadence: null, powerDrop: null, thresholdTimes: {}, samples: [], sessionDuration: 0, dataSource: "demo" as const, validSession: true, quality: "VALID" as const, best5s: 0, timestamp: 1 }
+    const marathon = { ...base, id: "A", participantName: "A", challenge: "monza" as const, completed: true, elapsedSeconds: 3600, bestLapSeconds: 340 } as DynoSession
+    const single = { ...base, id: "B", participantName: "B", challenge: "monza" as const, completed: true, elapsedSeconds: 380, bestLapSeconds: 380 } as DynoSession
+    expect(rankFor([single, marathon], "monza")[0].id).toBe("A")
   })
 })

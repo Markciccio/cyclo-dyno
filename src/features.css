@@ -774,3 +774,200 @@
 }
 .tone-grade-flat b { color: #7ce8a4; } .tone-grade-flat i { background: #2b9f5e; }
 .tone-grade-wall b { color: #fff3a0; } .tone-grade-wall i { background: #e40000; }
+
+/* ========= DYNO SPRINT: la schermata riempie il video, i watt dominano ========= */
+.sprint {
+  position: relative; flex: 1 1 auto; display: flex; flex-direction: column;
+  gap: .4rem; justify-content: center; max-width: 1100px; width: 100%; margin: 0 auto;
+}
+.sprint-power { display: grid; grid-template-columns: 1fr 1fr; gap: .4rem; align-items: end; }
+.sprint-cell { text-align: center; min-width: 0; }
+.sprint-cell > label, .sprint-speed > label {
+  display: block; font-family: "DM Mono"; font-size: .7rem;
+  letter-spacing: .14em; color: #97a2ae;
+}
+.sprint .power-readout {
+  display: block; font-size: clamp(3.4rem, 21vw, 11rem); line-height: .82;
+  letter-spacing: -.06em; transform: none;
+}
+.sprint-cell:nth-child(2) .power-readout { font-size: clamp(2.8rem, 17vw, 9rem); }
+.sprint .power-readout em, .sprint .speed-readout em {
+  font-size: .26em; font-style: normal; margin-left: .12em; letter-spacing: 0;
+}
+.sprint-speed { text-align: center; }
+/* La velocità sta sotto la potenza e un gradino più piccola, come chiesto. */
+.sprint .speed-readout {
+  display: block; font-size: clamp(2.6rem, 15vw, 8rem); line-height: .84;
+  letter-spacing: -.06em; color: #dff8ff;
+  text-shadow: 0 0 12px #fff, 0 0 28px #20c9ff, 0 0 64px #087eb5;
+}
+.sprint .chart { flex: 1 1 90px; min-height: 78px; margin: 0; }
+.sprint .metrics { flex: 0 0 auto; }
+
+/* Il lampo del nuovo picco: esplode al centro e sparisce da solo. */
+.peak-burst {
+  position: absolute; z-index: 30; left: 50%; top: 38%;
+  transform: translate(-50%, -50%); text-align: center; pointer-events: none;
+  animation: peakBurst 1.05s cubic-bezier(.16, .9, .3, 1) forwards;
+  will-change: transform, opacity;
+}
+.peak-burst span {
+  display: block; font-family: "DM Mono"; font-size: clamp(.8rem, 3.4vw, 1.4rem);
+  letter-spacing: .3em; color: #fff;
+  text-shadow: 0 0 10px #ffb020, 0 0 30px #ff4c1f;
+}
+.peak-burst b {
+  display: block; font-size: clamp(3.4rem, 17vw, 9rem); line-height: .85;
+  letter-spacing: -.05em; color: #fff3a0;
+  text-shadow: 0 0 14px #fff, 0 0 40px #ffca10, 0 0 90px #ff4415, 0 0 160px #e40000;
+}
+.peak-burst b em { font-size: .3em; font-style: normal; margin-left: .1em; }
+@keyframes peakBurst {
+  0%   { opacity: 0; transform: translate(-50%, -50%) scale(.45) rotate(-6deg); }
+  22%  { opacity: 1; transform: translate(-50%, -50%) scale(1.16) rotate(2deg); }
+  42%  { opacity: 1; transform: translate(-50%, -50%) scale(1) rotate(0deg); }
+  100% { opacity: 0; transform: translate(-50%, -132%) scale(1.5) rotate(0deg); }
+}
+/* Sfondare un centinaio di watt merita un lampo più grosso e un alone. */
+.peak-burst.hundred { animation-duration: 1.5s; }
+.peak-burst.hundred b { font-size: clamp(4.6rem, 25vw, 13rem); color: #fff; }
+.peak-burst.hundred::before {
+  content: ""; position: absolute; left: 50%; top: 50%; width: 130vw; height: 130vw;
+  transform: translate(-50%, -50%); border-radius: 50%; z-index: -1;
+  background: radial-gradient(closest-side, #ff8a0055, #ff2d0022 45%, transparent 70%);
+  animation: peakShock 1.5s ease-out forwards;
+}
+@keyframes peakShock {
+  0% { opacity: .9; transform: translate(-50%, -50%) scale(.12); }
+  100% { opacity: 0; transform: translate(-50%, -50%) scale(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .peak-burst, .peak-burst.hundred::before { animation-duration: .01s; opacity: 0; }
+}
+
+@media (max-width: 520px) {
+  .sprint { gap: .3rem; }
+  .sprint-cell > label, .sprint-speed > label { font-size: .58rem; letter-spacing: .1em; }
+  .sprint .chart { min-height: 64px; }
+  .sprint .metrics > div { padding: .32rem .25rem; }
+}
+
+/* ========= riquadri in basso a destra: distacchi e pendenza, impilati ========= */
+.map-hud {
+  position: absolute; z-index: 500; right: 152px; bottom: 24px;
+  display: grid; gap: .3rem; justify-items: end; text-align: right; pointer-events: none;
+}
+.map-hud .grade-hud { position: static; right: auto; bottom: auto; }
+.delta-hud { font-family: "Barlow Condensed", Arial, sans-serif; }
+.delta-hud label {
+  display: block; font-family: "DM Mono"; font-size: .55rem;
+  letter-spacing: .12em; color: #b7c2ce; text-shadow: 0 1px 3px #000;
+}
+.delta-hud strong {
+  display: block; font-size: clamp(2rem, 4.4vw, 3.4rem); line-height: .86; letter-spacing: -.04em;
+}
+.delta-hud em { font-size: .34em; font-style: normal; margin-left: .08em; }
+.delta-hud.ahead strong { color: #48ed92; text-shadow: 0 0 10px #19ff6a, 0 0 30px #0f8b43; }
+.delta-hud.behind strong { color: #ff6a4a; text-shadow: 0 0 10px #ff1b1b, 0 0 30px #a30000; }
+
+@media (max-width: 520px) {
+  .map-hud { right: 6px; bottom: 18px; gap: .15rem; }
+  .delta-hud label { font-size: .46rem; }
+  .delta-hud strong { font-size: 1.5rem; }
+}
+
+/* ===== assetto dello sprint: lo spazio libero va al grafico ===== */
+.sprint { justify-content: flex-start; }
+.burst-zone { position: relative; min-height: 92px; flex: 0 0 auto; }
+.peak-burst { top: 50%; }
+/* In un flex a colonna i margini automatici fanno collassare la barra. */
+.sprint .gauge { width: 100%; max-width: none; margin: .35rem 0; }
+/* Il grafico è nascosto sui percorsi, ma nello sprint è il pezzo forte. */
+.sprint .chart { display: block; flex: 1 1 120px; min-height: 90px; margin: .4rem 0; }
+.sprint .metrics { margin-top: .3rem; }
+
+@media (max-width: 520px) {
+  .burst-zone { min-height: 76px; }
+  .sprint .chart { min-height: 76px; }
+  .sprint .gauge { height: 1.5rem; }
+}
+
+/* ========= giri: annuncio a fine giro, contatore, tabella ========= */
+.lap-count {
+  font-family: "DM Mono"; font-size: .72rem; letter-spacing: .06em; color: #7be3ff;
+}
+.lap-flash {
+  position: relative; margin: .35rem auto; max-width: 1100px; width: 100%;
+  border: 1px solid #35404a; border-left: 4px solid #7be3ff; background: #0b1219f2;
+  padding: .45rem .7rem; font-family: "DM Mono";
+  animation: lapIn .45s cubic-bezier(.16, .9, .3, 1), lapOut .8s ease-in 6.2s forwards;
+}
+.lap-flash.best {
+  border-left-color: var(--volt);
+  box-shadow: 0 0 22px #d8ff2244, inset 0 0 30px #d8ff2211;
+}
+.lap-flash header { display: flex; align-items: baseline; gap: .6rem; flex-wrap: wrap; }
+.lap-flash header b { font-size: .8rem; color: #97a2ae; letter-spacing: .1em; }
+.lap-flash header strong {
+  font-family: "Barlow Condensed", Arial, sans-serif; font-size: clamp(1.8rem, 6vw, 3rem);
+  line-height: 1; color: #dff8ff; letter-spacing: -.03em;
+}
+.lap-flash.best header strong { color: var(--volt); text-shadow: 0 0 14px #d8ff22, 0 0 40px #8fb400; }
+.lap-flash header span { margin-left: auto; font-size: .68rem; letter-spacing: .1em; color: #7be3ff; }
+.lap-flash.best header span { color: var(--volt); }
+.lap-flash dl { display: grid; grid-template-columns: repeat(4, 1fr); gap: .2rem .5rem; margin: .3rem 0 0; border: 0; }
+.lap-flash dt { padding: 0; border: 0; font-size: .5rem; letter-spacing: .08em; color: #8b96a3; }
+.lap-flash dd { padding: 0; border: 0; font-size: .95rem; color: #dff8ff; }
+@keyframes lapIn { from { opacity: 0; transform: translateY(-14px) scale(.97); } }
+@keyframes lapOut { to { opacity: 0; transform: translateY(-8px); } }
+@media (prefers-reduced-motion: reduce) { .lap-flash { animation: none; } }
+
+.lap-table { border-top: 2px solid var(--volt); font-family: "DM Mono"; font-size: .74rem; margin: 1rem 0; text-align: left; }
+.lap-table .tr {
+  display: grid; grid-template-columns: .5fr 1fr .8fr .8fr .8fr .8fr;
+  gap: .4rem; padding: .5rem .3rem; border-bottom: 1px solid #252b33;
+}
+.lap-table .tr.head { color: #9099a6; font-size: .62rem; }
+.lap-table .tr.best { background: #1a2206; color: var(--volt); }
+
+@media (max-width: 520px) {
+  .lap-flash { padding: .35rem .5rem; margin: .25rem auto; }
+  .lap-flash header strong { font-size: 1.6rem; }
+  .lap-flash header span { font-size: .55rem; width: 100%; margin-left: 0; }
+  .lap-flash dd { font-size: .8rem; }
+  .lap-table { font-size: .62rem; }
+  .lap-table .tr { gap: .2rem; padding: .4rem .2rem; }
+}
+
+/* ===== l'annuncio del giro si sovrappone alla mappa invece di spingere il resto ===== */
+.dyno { position: relative; }
+.lap-flash {
+  position: absolute; z-index: 700; left: 50%; top: 240px;
+  transform: translateX(-50%); width: min(94%, 560px); margin: 0;
+  background: #060c11f7; pointer-events: none;
+}
+@keyframes lapIn { from { opacity: 0; transform: translateX(-50%) translateY(-14px) scale(.97); } }
+@keyframes lapOut { to { opacity: 0; transform: translateX(-50%) translateY(-8px); } }
+
+/* L'intestazione andava a capo appena compariva il contatore dei giri. */
+.dyno header { gap: .5rem; flex-wrap: nowrap; min-width: 0; }
+.dyno header > .live { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dyno header > .lap-count { white-space: nowrap; flex: 0 0 auto; }
+.dyno header > b { white-space: nowrap; flex: 0 0 auto; }
+
+@media (max-width: 520px) {
+  .lap-flash { top: 24vh; }
+  .dyno header { gap: .35rem; }
+  .live { font-size: .55rem; }
+  .lap-count { font-size: .58rem; }
+  .dyno header > b { font-size: 1.05rem; }
+  .dyno header > b small { font-size: .55rem; }
+}
+.live b { font-weight: 400; color: #d8ff22; }
+
+/* Il riquadro del giro lascia libera la colonna dei mezzi sulla destra. */
+@media (max-width: 520px) {
+  .lap-flash { left: 8px; right: 44px; width: auto; transform: none; }
+  @keyframes lapIn { from { opacity: 0; transform: translateY(-14px) scale(.97); } }
+  @keyframes lapOut { to { opacity: 0; transform: translateY(-8px); } }
+}

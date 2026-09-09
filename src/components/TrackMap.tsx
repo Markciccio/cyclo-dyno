@@ -55,6 +55,8 @@ export function TrackMap({
   ghostName,
   bestLabel,
   gradePercent,
+  rivalSeconds,
+  bestSeconds,
   onGhostChange,
   running,
 }: {
@@ -72,6 +74,10 @@ export function TrackMap({
   bestLabel?: string;
   /** Pendenza sotto le ruote, in percento: mostrata in grande sui percorsi che salgono. */
   gradePercent?: number;
+  /** Secondi di vantaggio (negativi) o ritardo sullo sfidante a pari watt. */
+  rivalSeconds?: number;
+  /** Secondi rispetto al miglior giro registrato sul tracciato. */
+  bestSeconds?: number;
   onGhostChange: (choice: GhostChoice) => void;
   running: boolean;
 }) {
@@ -207,16 +213,20 @@ export function TrackMap({
             <small>{gap >= 0 ? "sei davanti" : "sei dietro"}</small>
           </div>
         )}
-        {climbs && (
-          <div className={`grade-hud ${gradeTone(gradePercent ?? 0)}`}>
-            <label>PENDENZA</label>
-            <strong>
-              {(gradePercent ?? 0) >= 0 ? "+" : "−"}
-              {Math.abs(gradePercent ?? 0).toFixed(1)}
-              <em>%</em>
-            </strong>
-          </div>
-        )}
+        <div className="map-hud">
+          {rivalSeconds !== undefined && <Delta n={`GHOST · ${vehicles[ghostVehicle].label}`} seconds={rivalSeconds} />}
+          {bestSeconds !== undefined && <Delta n="IL TUO RECORD" seconds={bestSeconds} />}
+          {climbs && (
+            <div className={`grade-hud ${gradeTone(gradePercent ?? 0)}`}>
+              <label>PENDENZA</label>
+              <strong>
+                {(gradePercent ?? 0) >= 0 ? "+" : "−"}
+                {Math.abs(gradePercent ?? 0).toFixed(1)}
+                <em>%</em>
+              </strong>
+            </div>
+          )}
+        </div>
       </div>
       <aside className="map-side">
         <div className="vehicle-switch">
@@ -237,5 +247,20 @@ export function TrackMap({
       </aside>
       <p className="satellite-note">Satellite © Esri · tracciato © OpenStreetMap · mezzo simulato: {vehicles[vehicle].label}</p>
     </section>
+  );
+}
+
+/** Distacco in secondi: negativo vuol dire che si è davanti. */
+function Delta({ n, seconds }: { n: string; seconds: number }) {
+  const ahead = seconds <= 0;
+  return (
+    <div className={`delta-hud ${ahead ? "ahead" : "behind"}`}>
+      <label>{n}</label>
+      <strong>
+        {ahead ? "−" : "+"}
+        {Math.abs(seconds).toFixed(1)}
+        <em>s</em>
+      </strong>
+    </div>
   );
 }

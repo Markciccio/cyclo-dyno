@@ -5,6 +5,7 @@ import type {
   DynoSession,
   PowerDataProvider,
   GhostChoice,
+  Lap,
   SessionSample,
   Settings,
   VehicleProfile,
@@ -14,6 +15,7 @@ import { AssiomaBluetoothProvider } from "./services/assiomaBluetooth";
 import { advanceVirtualSpeed } from "./logic/speed";
 import { cornerLimitKmh, sampleTrack } from "./logic/tracks";
 import { calculateMetrics, formatLapTime, rankFor } from "./logic/metrics";
+import { bestLap, lapRank, lapSecondsAt, rankLabel, summariseLap } from "./logic/laps";
 import { sessionRepo, download } from "./storage/repository";
 import { Gauge } from "./components/Gauge";
 import { PowerChart } from "./components/PowerChart";
@@ -21,7 +23,7 @@ import { TrackMap } from "./components/TrackMap";
 import { ElevationProfile } from "./components/ElevationProfile";
 import { VehicleIcon } from "./components/VehicleIcon";
 import { challenges, challengeTrack, totalMassKg, vehicles } from "./logic/challenges";
-import { bestOnTrack, ghostLabel, isVehicleGhost, recordMetersAt } from "./logic/ghost";
+import { bestOnTrack, ghostLabel, isVehicleGhost, recordMetersAt, recordSecondsAt } from "./logic/ghost";
 const defaults: Settings = {
   eventName: "HPV POWER CHALLENGE",
   defaultDuration: 60,
@@ -77,7 +79,10 @@ export function App() {
     [vehicle, setVehicle] = useState<VehicleProfile>("velomobile"),
     [challenge, setChallenge] = useState<ChallengeId>("dyno"),
     [ghost, setGhost] = useState<GhostChoice>("none"),
-    [rivalMeters, setRivalMeters] = useState(0);
+    [rivalMeters, setRivalMeters] = useState(0),
+    [burst, setBurst] = useState<{ watts: number; id: number; hundred: boolean }>(),
+    [laps, setLaps] = useState<Lap[]>([]),
+    [lapFlash, setLapFlash] = useState<{ lap: Lap; rank: number; total: number }>();
   const pRef = useRef(provider),
     sRef = useRef<SessionSample[]>([]),
     start = useRef(0),
@@ -92,6 +97,12 @@ export function App() {
     ghostRef = useRef<GhostChoice>("none"),
     rivalSpeedRef = useRef(0),
     rivalMetersRef = useRef(0),
+    peakRef = useRef(0),
+    lastBurstRef = useRef(0),
+    burstId = useRef(0),
+    lapsRef = useRef<Lap[]>([]),
+    lapStartMs = useRef(0),
+    lapStartKm = useRef(0),
     wakeLockRef = useRef<ScreenLock>(),
     sessionActiveRef = useRef(false);
   pRef.current = provider;
@@ -99,6 +110,12 @@ export function App() {
     sessionRepo.settings(defaults).then(setSettings);
     sessionRepo.getAll().then(setSessions);
   }, []);
+  // L'annuncio del giro sparisce da solo: pedalando non si tocca lo schermo.
+  useEffect(() => {
+    if (!lapFlash) return;
+    const hide = window.setTimeout(() => setLapFlash(undefined), 7000);
+    return () => clearTimeout(hide);
+  }, [lapFlash]);
   useEffect(() => {
     const resume = () => { if (document.visibilityState === "visible" && sessionActiveRef.current) void requestWakeLock(); };
     document.addEventListener("visibilitychange", resume);
@@ -116,6 +133,9 @@ export function App() {
     activeChallenge = challenges[challenge],
     activeVehicle = vehicles[vehicle];
   const speedPeak = Math.max(0, ...samples.map((x) => x.virtualSpeedKmh));
+  // bestWindow scandisce i campioni per ogni campione: va calcolato una volta sola.
+  const liveMetrics = useMemo(() => calculateMetrics(samples, settings.thresholds), [samples, settings.thresholds]);
+  const liveBest5s = liveMetrics.best5s;
   const newSpeedPeak = !!live && samples.length > 1 && live.virtualSpeedKmh > Math.max(0, ...samples.slice(0, -1).map((x) => x.virtualSpeedKmh));
   const nav = (
     <nav>
@@ -198,6 +218,14 @@ export function App() {
     rivalSpeedRef.current = 0;
     rivalMetersRef.current = 0;
     setRivalMeters(0);
+    peakRef.current = 0;
+    lastBurstRef.current = 0;
+    setBurst(undefined);
+    lapsRef.current = [];
+    lapStartMs.current = 0;
+    lapStartKm.current = 0;
+    setLaps([]);
+    setLapFlash(undefined);
     setCount(3);
     setView("countdown");
     let n = 3;
@@ -248,6 +276,16 @@ export function App() {
             gradePercent: point ? point.grade * 100 : undefined,
             elevationMeters: point?.elevation,
           };
+        if (x.powerWatts > peakRef.current) {
+          const hundred = Math.floor(x.powerWatts / 100) > Math.floor(peakRef.current / 100);
+          peakRef.current = x.powerWatts;
+          // In rampa ogni campione è un nuovo record: si annuncia a intervalli,
+          // tranne quando si sfonda un centinaio, che merita sempre il lampo.
+          if (hundred || x.timestamp - lastBurstRef.current > 700) {
+            lastBurstRef.current = x.timestamp;
+            setBurst({ watts: Math.round(x.powerWatts), id: burstId.current++, hundred });
+          }
+        }
         sRef.current.push(y);
         if (track && dt > 0 && isVehicleGhost(ghostRef.current)) {
           // Lo sfidante riceve gli stessi watt e li spende con la sua fisica.
@@ -277,7 +315,23 @@ export function App() {
           lastPowerPaint.current = x.timestamp;
           setDisplayPower(x.powerWatts);
         }
-        if (course.distanceKm && distance >= course.distanceKm) finish(true);
+        // Su un anello si continua a girare: il traguardo chiude un giro, non la prova.
+        if (course.lap && course.distanceKm && distance - lapStartKm.current >= course.distanceKm) {
+          const lap = summariseLap({
+            samples: sRef.current,
+            fromMs: lapStartMs.current,
+            toMs: elapsed,
+            fromKm: lapStartKm.current,
+            toKm: distance,
+            index: lapsRef.current.length + 1,
+          });
+          lapsRef.current = [...lapsRef.current, lap];
+          setLaps(lapsRef.current);
+          setLapFlash({ lap, rank: lapRank(lap.seconds, lapsRef.current), total: lapsRef.current.length });
+          lapStartMs.current = elapsed;
+          lapStartKm.current = distance;
+        }
+        if (!course.lap && course.distanceKm && distance >= course.distanceKm) finish(true);
       });
     } catch (e) {
       sessionActiveRef.current = false;
@@ -308,7 +362,10 @@ export function App() {
       m = calculateMetrics(data, settings.thresholds);
     setSamples([...data]);
     const covered = data.at(-1)?.distanceKm ?? 0;
-    const target = challenges[challenge].distanceKm;
+    const course = challenges[challenge];
+    const target = course.distanceKm;
+    const sessionLaps = lapsRef.current;
+    const fastest = bestLap(sessionLaps);
     const finishTrack = challengeTrack(challenge);
     setResult({
       id: crypto.randomUUID(),
@@ -319,7 +376,10 @@ export function App() {
       elapsedSeconds: (performance.now() - start.current) / 1000,
       distanceKm: covered,
       climbedMeters: finishTrack ? sampleTrack(finishTrack, covered * 1000).climb : 0,
-      completed: valid && (!target || covered >= target - 0.005),
+      // Su un anello conta aver chiuso almeno un giro, non la distanza totale.
+      completed: valid && (course.lap ? sessionLaps.length > 0 : !target || covered >= target - 0.005),
+      laps: sessionLaps,
+      bestLapSeconds: fastest?.seconds,
       timestamp: Date.now(),
       sessionDuration: (performance.now() - start.current) / 1000,
       samples: data,
@@ -363,6 +423,8 @@ export function App() {
     const gradePercent = live?.gradePercent ?? 0;
     const climbed = liveTrack ? sampleTrack(liveTrack, metersDone).climb : 0;
     const record = bestOnTrack(sessions, challenge);
+    const isSprint = !liveTrack;
+    const peakPower = Math.max(0, ...samples.map((x) => x.powerWatts));
     const ghostMeters =
       ghost === "none"
         ? undefined
@@ -371,12 +433,34 @@ export function App() {
             ? recordMetersAt(record, clock)
             : undefined
           : rivalMeters;
+    // Distacco in secondi: sul record si inverte la sua traccia, sullo sfidante
+    // vivo si converte il distacco in metri al passo che si sta tenendo.
+    const recordLap = record?.laps?.length ? bestLap(record.laps) : undefined;
+    const bestSeconds = !record
+      ? undefined
+      : recordLap
+        ? // Anello: giro corrente contro il giro record, allo stesso punto della pista.
+          clock - lapStartMs.current / 1000 - lapSecondsAt(record.samples, recordLap, metersDone - lapStartKm.current * 1000)
+        : metersDone > 5
+          ? clock - recordSecondsAt(record, metersDone)
+          : undefined;
+    const rivalSeconds =
+      ghostMeters !== undefined && isVehicleGhost(ghost)
+        ? (metersDone - ghostMeters) / Math.max(2, (live?.virtualSpeedKmh ?? 0) / 3.6)
+        : undefined;
     return (
       <main className="dyno">
         <header>
           <span className="live">
-            ● {source.toUpperCase()} · {activeVehicle.label}{wakeActive ? " · SCHERMO ON" : ""}
+            ● {source.toUpperCase()} · {activeVehicle.label}
+            {/* Schermo tenuto acceso: un glifo, che la scritta faceva andare a capo l'intestazione. */}
+            {wakeActive && <b title="Schermo tenuto acceso"> ▣</b>}
           </span>
+          {activeChallenge.lap && laps.length > 0 && (
+            <span className="lap-count">
+              GIRO {laps.length + 1} · BEST {formatLapTime(bestLap(laps)?.seconds ?? 0)}
+            </span>
+          )}
           <b>
             {clock.toFixed(1)}
             <small>{activeChallenge.distanceKm ? " SEC" : " SEC LEFT"}</small>
@@ -393,10 +477,69 @@ export function App() {
           ghostName={ghostLabel(ghost, record)}
           bestLabel={record ? `${record.participantName} · ${formatLapTime(record.elapsedSeconds ?? 0)}` : undefined}
           gradePercent={gradePercent}
+          rivalSeconds={rivalSeconds}
+          bestSeconds={bestSeconds}
           onGhostChange={selectGhost}
           running
         />
-        {challenge === "dyno" && <VehicleControls vehicle={vehicle} onChange={selectVehicle} />}
+        {lapFlash && (
+          <section key={lapFlash.lap.index} className={`lap-flash ${lapFlash.rank === 1 ? "best" : ""}`}>
+            <header>
+              <b>GIRO {lapFlash.lap.index}</b>
+              <strong>{formatLapTime(lapFlash.lap.seconds)}</strong>
+              <span>{rankLabel(lapFlash.rank, lapFlash.total)}</span>
+            </header>
+            <dl>
+              <div><dt>MEDIA</dt><dd>{lapFlash.lap.averageKmh.toFixed(1)} km/h</dd></div>
+              <div><dt>MAX</dt><dd>{lapFlash.lap.maxKmh.toFixed(1)} km/h</dd></div>
+              <div><dt>W MEDI</dt><dd>{Math.round(lapFlash.lap.averageWatts)} W</dd></div>
+              <div><dt>W MAX</dt><dd>{Math.round(lapFlash.lap.maxWatts)} W</dd></div>
+            </dl>
+          </section>
+        )}
+        {isSprint && <VehicleControls vehicle={vehicle} onChange={selectVehicle} />}
+        {isSprint && (
+          <section className="sprint">
+            {/* Banda riservata al lampo: così esplode senza coprire i watt che stai leggendo. */}
+            <div className="burst-zone">
+              {burst && (
+                <div key={burst.id} className={`peak-burst ${burst.hundred ? "hundred" : ""}`} aria-hidden="true">
+                  <span>NUOVO PICCO</span>
+                  <b>{burst.watts}<em>W</em></b>
+                </div>
+              )}
+            </div>
+            <div className="sprint-power">
+              <div className="sprint-cell">
+                <label>POTENZA</label>
+                <strong className={`power-readout ${powerLevel(displayPower)}`}>
+                  {displayPower}<em>W</em>
+                </strong>
+              </div>
+              <div className="sprint-cell">
+                <label>BEST 5 SEC</label>
+                <strong className={`power-readout ${powerLevel(liveBest5s ?? 0)}`}>
+                  {liveBest5s === null ? "--" : Math.round(liveBest5s)}<em>W</em>
+                </strong>
+              </div>
+            </div>
+            <Gauge power={displayPower} range={activeChallenge.powerRangeWatts} />
+            <div className="sprint-speed">
+              <label>VELOCITÀ</label>
+              <strong className={`speed-readout ${newSpeedPeak ? "speed-peak" : ""}`}>
+                {displaySpeed.toFixed(1)}<em>km/h</em>
+              </strong>
+            </div>
+            <PowerChart samples={samples} />
+            <section className="metrics">
+              <Metric n="PICCO POTENZA" v={`${Math.round(peakPower)} W`} />
+              <Metric n="CADENZA" v={`${live?.cadenceRpm ?? "--"} rpm`} />
+              <Metric n="PICCO CADENZA" v={fmt(liveMetrics.maxCadence, "rpm")} />
+              <Metric n="PICCO VELOCITÀ" v={`${speedPeak.toFixed(1)} km/h`} />
+            </section>
+          </section>
+        )}
+        {!isSprint && (
         <section className="hero">
           <div className="hero-reading power-reading">
             <label>POTENZA</label>
@@ -414,6 +557,7 @@ export function App() {
             <div className={`speed-scale ${newSpeedPeak ? "speed-extra" : ""}`}><div style={{width:`${Math.min(100,displaySpeed)}%`}}/>{newSpeedPeak&&<i>NUOVO PICCO · {speedPeak.toFixed(1)} km/h</i>}<span>0</span><b>100 km/h</b></div>
           </div>
         </section>
+        )}
         {liveTrack && (
           <section className="run-strip">
             <Bar n="POTENZA" v={`${displayPower}`} u="W" fill={displayPower / activeChallenge.powerRangeWatts} tone="power" />
@@ -460,28 +604,19 @@ export function App() {
             windowMeters={liveTrack.totalClimb > 150 ? 1000 : undefined}
           />
         )}
-        <section className="metrics">
-          <Metric
-            n="PEAK"
-            v={`${Math.max(0, ...samples.map((x) => x.powerWatts))} W`}
-          />
-          <Metric n="CADENCE" v={`${live?.cadenceRpm ?? "--"} rpm`} />
-          <Metric
-            n="MAX SPEED"
-            v={`${speedPeak.toFixed(1)} km/h`}
-          />
-          <Metric
-            n="DISTANCE"
-            v={
-              activeChallenge.distanceKm
-                ? `${metersDone.toFixed(0)} m`
-                : fmt(calculateMetrics(samples, settings.thresholds).best5s)
-            }
-          />
-        </section>
-        <PowerChart samples={samples} />
-        <button className="danger" onClick={() => finish(false)}>
-          STOP / INVALIDA
+        {!isSprint && (
+          <>
+            <section className="metrics">
+              <Metric n="PICCO POTENZA" v={`${Math.round(peakPower)} W`} />
+              <Metric n="CADENZA" v={`${live?.cadenceRpm ?? "--"} rpm`} />
+              <Metric n="PICCO VELOCITÀ" v={`${speedPeak.toFixed(1)} km/h`} />
+              <Metric n="DISTANZA" v={`${metersDone.toFixed(0)} m`} />
+            </section>
+            <PowerChart samples={samples} />
+          </>
+        )}
+        <button className="danger" onClick={() => finish(activeChallenge.lap && laps.length > 0)}>
+          {activeChallenge.lap && laps.length > 0 ? "TERMINA SESSIONE" : "STOP / INVALIDA"}
         </button>
       </main>
     );
@@ -499,7 +634,12 @@ export function App() {
             {challenges[result.challenge ?? "dyno"].label} · {result.riderWeightKg ?? 70} kg atleta +{" "}
             {result.vehicle ? vehicles[result.vehicle].weightKg : 24} kg mezzo + 2 kg accessori
           </p>
-          {result.challenge && result.challenge !== "dyno" ? (
+          {result.bestLapSeconds ? (
+            <>
+              <label>MIGLIOR GIRO · {result.laps?.length ?? 0} GIRI</label>
+              <strong>{formatLapTime(result.bestLapSeconds)}</strong>
+            </>
+          ) : result.challenge && result.challenge !== "dyno" ? (
             <>
               <label>{result.completed ? "TEMPO SUL PERCORSO" : "PROVA NON COMPLETATA"}</label>
               <strong>{result.completed ? formatLapTime(result.elapsedSeconds ?? 0) : `${(result.distanceKm ?? 0).toFixed(2)} km`}</strong>
@@ -535,6 +675,7 @@ export function App() {
               <Metric n="MEDIA" v={`${(result.distanceKm / (result.elapsedSeconds / 3600)).toFixed(1)} km/h`} />
             )}
           </div>
+          {!!result.laps?.length && <LapTable laps={result.laps} />}
           <PowerChart samples={result.samples} />
           <div className="actions">
             <button className="primary" onClick={save}>
@@ -765,6 +906,26 @@ export function App() {
         {notice && <p className="notice">{notice}</p>}
       </section>
     </main>
+  );
+}
+function LapTable({ laps }: { laps: Lap[] }) {
+  const fastest = bestLap(laps)?.seconds;
+  return (
+    <div className="lap-table">
+      <div className="tr head">
+        <span>GIRO</span><span>TEMPO</span><span>MEDIA</span><span>MAX</span><span>W MEDI</span><span>W MAX</span>
+      </div>
+      {laps.map((lap) => (
+        <div className={`tr ${lap.seconds === fastest ? "best" : ""}`} key={lap.index}>
+          <span>{lap.index}</span>
+          <span>{formatLapTime(lap.seconds)}</span>
+          <span>{lap.averageKmh.toFixed(1)}</span>
+          <span>{lap.maxKmh.toFixed(1)}</span>
+          <span>{Math.round(lap.averageWatts)}</span>
+          <span>{Math.round(lap.maxWatts)}</span>
+        </div>
+      ))}
+    </div>
   );
 }
 function Metric({ n, v }: { n: string; v: string }) {
