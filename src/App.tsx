@@ -564,6 +564,8 @@ export function App() {
     const record = bestOnTrack(sessions, challenge);
     const isSprint = !liveTrack;
     const peakPower = Math.max(0, ...samples.map((x) => x.powerWatts));
+    const sampledSeconds = (samples.at(-1)?.elapsedMs ?? 0) / 1000;
+    const averageSpeedKmh = sampledSeconds > 0 ? (metersDone / 1000) / (sampledSeconds / 3600) : 0;
     const ghostMeters =
       ghost === "none"
         ? undefined
@@ -700,9 +702,23 @@ export function App() {
           <section className="run-strip">
             {/* Un solo quadro dati: potenza e velocità sono già enormi qui sopra,
                 la pendenza e il residuo stanno sulla mappa. */}
-            <Bar n="PICCO POTENZA" v={`${Math.round(peakPower)}`} u="W" fill={peakPower / activeChallenge.powerRangeWatts} tone="power" />
+            <Bar
+              n={challenge === "monza" ? "POTENZA MEDIA" : "PICCO POTENZA"}
+              v={`${Math.round(challenge === "monza" ? liveMetrics.averagePower : peakPower)}`}
+              u="W"
+              fill={(challenge === "monza" ? liveMetrics.averagePower : peakPower) / activeChallenge.powerRangeWatts}
+              tone="power"
+              emphasis={challenge === "monza"}
+            />
             <Bar n="CADENZA" v={`${live?.cadenceRpm ?? "--"}`} u="rpm" fill={(live?.cadenceRpm ?? 0) / 150} tone="cadence" />
-            <Bar n="PICCO VELOCITÀ" v={speedPeak.toFixed(1)} u="km/h" fill={speedPeak / 100} tone="speed" />
+            <Bar
+              n={challenge === "monza" ? "VELOCITÀ MEDIA" : "PICCO VELOCITÀ"}
+              v={(challenge === "monza" ? averageSpeedKmh : speedPeak).toFixed(1)}
+              u="km/h"
+              fill={(challenge === "monza" ? averageSpeedKmh : speedPeak) / 100}
+              tone="speed"
+              emphasis={challenge === "monza"}
+            />
             <Bar
               n="DISTANZA"
               v={(metersDone / 1000).toFixed(2)}
@@ -1066,9 +1082,9 @@ function Metric({ n, v }: { n: string; v: string }) {
 /** Stesse soglie del riquadro pendenza sulla mappa: due scale diverse confondono. */
 const gradeStripTone = (percent: number) =>
   percent < 2 ? "grade-flat" : percent < 5 ? "grade-easy" : percent < 8 ? "grade-mid" : percent < 11 ? "grade-hard" : "grade-wall";
-function Bar({ n, v, u, fill, tone }: { n: string; v: string; u: string; fill: number; tone: string }) {
+function Bar({ n, v, u, fill, tone, emphasis = false }: { n: string; v: string; u: string; fill: number; tone: string; emphasis?: boolean }) {
   return (
-    <div className={`run-cell tone-${tone}`}>
+    <div className={`run-cell tone-${tone} ${emphasis ? "emphasis" : ""}`}>
       <label>{n}</label>
       <b>
         {v}

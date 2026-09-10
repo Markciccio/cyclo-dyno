@@ -39,7 +39,6 @@ function zoomForSpan(map: L.Map, lat: number, meters: number) {
   const equator = 156543.03392 * Math.cos((lat * Math.PI) / 180);
   return Math.max(14, Math.min(MAX_ZOOM, Math.log2(equator / metresPerPixel)));
 }
-
 /** Fascia di colore della pendenza: stessa logica dei livelli di potenza. */
 const gradeTone = (percent: number) =>
   percent < 2 ? "grade-flat" : percent < 5 ? "grade-easy" : percent < 8 ? "grade-mid" : percent < 11 ? "grade-hard" : "grade-wall";
@@ -184,6 +183,7 @@ export function TrackMap({
   const progress = track.closed ? (meters % track.lengthMeters) / track.lengthMeters : meters / track.lengthMeters;
   const sector = sectorName(challenge, meters % track.lengthMeters);
   const gap = ghostMeters === undefined ? undefined : meters - ghostMeters;
+  const ghostSeconds = rivalSeconds ?? bestSeconds;
   // Su un anello pianeggiante la pendenza oscilla attorno allo zero e non dice nulla.
   const climbs = track.totalClimb > 150;
 
@@ -214,11 +214,14 @@ export function TrackMap({
               {Math.abs(gap) >= 1000 ? `${(Math.abs(gap) / 1000).toFixed(2)} km` : `${Math.abs(gap).toFixed(0)} m`}
             </strong>
             <small>{gap >= 0 ? "sei davanti" : "sei dietro"}</small>
+            {ghostSeconds !== undefined && (
+              <b className={`rival-seconds ${ghostSeconds <= 0 ? "ahead" : "behind"}`}>
+                {ghostSeconds <= 0 ? "−" : "+"}{Math.abs(ghostSeconds).toFixed(1)} s SUL GHOST
+              </b>
+            )}
           </div>
         )}
         <div className="map-hud">
-          {rivalSeconds !== undefined && <Delta n={`GHOST · ${vehicles[ghostVehicle].label}`} seconds={rivalSeconds} />}
-          {bestSeconds !== undefined && <Delta n="IL TUO RECORD" seconds={bestSeconds} />}
           {remainingClimb !== undefined && (
             <div className="climb-left">
               <label>RESIDUO</label>
@@ -259,20 +262,5 @@ export function TrackMap({
       </aside>
       <p className="satellite-note">Satellite © Esri · tracciato © OpenStreetMap · mezzo simulato: {vehicles[vehicle].label}</p>
     </section>
-  );
-}
-
-/** Distacco in secondi: negativo vuol dire che si è davanti. */
-function Delta({ n, seconds }: { n: string; seconds: number }) {
-  const ahead = seconds <= 0;
-  return (
-    <div className={`delta-hud ${ahead ? "ahead" : "behind"}`}>
-      <label>{n}</label>
-      <strong>
-        {ahead ? "−" : "+"}
-        {Math.abs(seconds).toFixed(1)}
-        <em>s</em>
-      </strong>
-    </div>
   );
 }

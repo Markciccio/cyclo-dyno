@@ -439,6 +439,9 @@
 .rival-panel small { font-size: .55rem; color: #8b96a3; }
 .rival-panel.ahead strong { color: #48ed92; }
 .rival-panel.behind strong { color: #ff8b6e; }
+.rival-seconds { display: block; margin-top: .25rem; padding-top: .2rem; border-top: 1px solid #35404a; font: 700 .62rem "DM Mono"; letter-spacing: .04em; }
+.rival-seconds.ahead { color: #48ed92; }
+.rival-seconds.behind { color: #ff8b6e; }
 
 
 /* Con lo sfidante in alto a destra, i pulsanti mezzo scendono sotto il suo pannello. */
@@ -448,6 +451,7 @@
   .rival-panel { right: 6px; top: 6px; padding: .25rem .4rem; }
   .rival-panel span, .rival-panel small { font-size: .48rem; }
   .rival-panel strong { font-size: 1rem; }
+  .rival-seconds { font-size: .5rem; margin-top: .15rem; }
   .vehicle-switch { top: 62px; }
 }
 
@@ -732,11 +736,13 @@
 
 /* I dati della striscia erano troppo piccoli per una lettura al volo pedalando. */
 .run-cell b { font-size: clamp(1.5rem, 4.2vw, 2.2rem); }
+.run-cell.emphasis b { font-size: clamp(1.7rem, 4.8vw, 2.5rem); }
 .run-cell label { font-size: 11px; }
 .run-cell em { font-size: .4em; }
 .tone-remaining b { color: #ffd2e2; } .tone-remaining i { background: #c9457a; }
 @media (max-width: 520px) {
   .run-cell b { font-size: 1.35rem; }
+  .run-cell.emphasis b { font-size: 1.5rem; }
   .run-cell label { font-size: 9px; }
   .run-cell { padding: .32rem .4rem .5rem; }
 }
