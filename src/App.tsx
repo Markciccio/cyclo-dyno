@@ -55,6 +55,39 @@ const powerLevel = (w: number) =>
       : w >= 180
         ? "power-yellow"
         : "power-green";
+type SprintBurst = {
+  id: number;
+  title: string;
+  message: string;
+  kind: "peak" | "top5" | "hold";
+  hundred: boolean;
+};
+const holdMessages = [
+  "TIENI LA POTENZA!",
+  "DAI TUTTO!",
+  "NON MOLLARE!",
+  "SPINGI FINO IN FONDO!",
+  "SEI IN ZONA ROSSA!",
+  "ANCORA TRE SECONDI!",
+  "GAMBE, CUORE, GAS!",
+];
+/** Media ponderata degli ultimi N secondi: non dipende dalla frequenza del sensore. */
+function trailingPower(samples: SessionSample[], seconds: number) {
+  const end = samples.at(-1)?.elapsedMs;
+  if (end === undefined) return 0;
+  const start = Math.max(0, end - seconds * 1000);
+  let wattMilliseconds = 0;
+  let milliseconds = 0;
+  for (let i = 0; i < samples.length - 1; i++) {
+    const from = Math.max(start, samples[i].elapsedMs);
+    const to = Math.min(end, samples[i + 1].elapsedMs);
+    if (to > from) {
+      wattMilliseconds += samples[i].powerWatts * (to - from);
+      milliseconds += to - from;
+    }
+  }
+  return milliseconds ? wattMilliseconds / milliseconds : samples.at(-1)?.powerWatts ?? 0;
+}
 export function App() {
   const [view, setView] = useState<View>(
       location.pathname === "/display" ? "display" : "home",
@@ -80,7 +113,7 @@ export function App() {
     [challenge, setChallenge] = useState<ChallengeId>("dyno"),
     [ghost, setGhost] = useState<GhostChoice>("none"),
     [rivalMeters, setRivalMeters] = useState(0),
-    [burst, setBurst] = useState<{ watts: number; id: number; hundred: boolean }>(),
+    [burst, setBurst] = useState<SprintBurst>(),
     [laps, setLaps] = useState<Lap[]>([]),
     [lapFlash, setLapFlash] = useState<{ lap: Lap; rank: number; total: number }>();
   const pRef = useRef(provider),
@@ -98,7 +131,10 @@ export function App() {
     rivalSpeedRef = useRef(0),
     rivalMetersRef = useRef(0),
     peakRef = useRef(0),
+    best5Ref = useRef(0),
+    best3Ref = useRef(0),
     lastBurstRef = useRef(0),
+    lastCoachRef = useRef(0),
     burstId = useRef(0),
     lapsRef = useRef<Lap[]>([]),
     lapStartMs = useRef(0),
@@ -219,7 +255,10 @@ export function App() {
     rivalMetersRef.current = 0;
     setRivalMeters(0);
     peakRef.current = 0;
+    best5Ref.current = 0;
+    best3Ref.current = 0;
     lastBurstRef.current = 0;
+    lastCoachRef.current = 0;
     setBurst(undefined);
     lapsRef.current = [];
     lapStartMs.current = 0;
@@ -276,6 +315,7 @@ export function App() {
             gradePercent: point ? point.grade * 100 : undefined,
             elevationMeters: point?.elevation,
           };
+        let feedback: Omit<SprintBurst, "id"> | undefined;
         if (x.powerWatts > peakRef.current) {
           const hundred = Math.floor(x.powerWatts / 100) > Math.floor(peakRef.current / 100);
           peakRef.current = x.powerWatts;
@@ -283,8 +323,45 @@ export function App() {
           // tranne quando si sfonda un centinaio, che merita sempre il lampo.
           if (hundred || x.timestamp - lastBurstRef.current > 700) {
             lastBurstRef.current = x.timestamp;
-            setBurst({ watts: Math.round(x.powerWatts), id: burstId.current++, hundred });
+            feedback = {
+              title: "NUOVO PICCO!",
+              message: hundred ? "POTENZA FUORI SCALA!" : "CONTINUA COSÌ!",
+              kind: "peak",
+              hundred,
+            };
           }
+        }
+        // Nello Sprint il feedback guarda le finestre reali e non il singolo
+        // campione: così sprona a tenere lo sforzo, non a dare un colpo secco.
+        if (challenge === "dyno") {
+          const nextSamples = [...sRef.current, y];
+          const current3 = trailingPower(nextSamples, 3);
+          const current5 = trailingPower(nextSamples, 5);
+          const hasThreeSeconds = elapsed >= 3000;
+          const hasFiveSeconds = elapsed >= 5000;
+          const newTop5 = hasFiveSeconds && current5 > best5Ref.current + 3;
+          if (newTop5) {
+            best5Ref.current = current5;
+            if (feedback) {
+              feedback = { ...feedback, message: "TOP 5 SECONDI • DAI TUTTO!", kind: "top5", hundred: true };
+            } else {
+              feedback = { title: "TOP 5 SECONDI!", message: "RECORD IN CORSO • NON MOLLARE!", kind: "top5", hundred: false };
+            }
+          }
+          if (hasThreeSeconds && current3 > best3Ref.current) best3Ref.current = current3;
+          const holdingNearTop = hasThreeSeconds && current3 >= Math.max(450, best3Ref.current * 0.94);
+          if (!feedback && holdingNearTop && x.timestamp - lastCoachRef.current > 2400) {
+            feedback = {
+              title: holdMessages[burstId.current % holdMessages.length],
+              message: "TOP 3 SECONDI IN CORSO",
+              kind: "hold",
+              hundred: current3 > 750,
+            };
+          }
+        }
+        if (feedback) {
+          lastCoachRef.current = x.timestamp;
+          setBurst({ ...feedback, id: burstId.current++ });
         }
         sRef.current.push(y);
         if (track && dt > 0 && isVehicleGhost(ghostRef.current)) {
@@ -504,8 +581,9 @@ export function App() {
             {/* Banda riservata al lampo: così esplode senza coprire i watt che stai leggendo. */}
             <div className="burst-zone">
               {burst && (
-                <div key={burst.id} className={`peak-burst ${burst.hundred ? "hundred" : ""}`} aria-hidden="true">
-                  <span>NUOVO PICCO</span>
+                <div key={burst.id} className={`peak-burst burst-${burst.kind} ${burst.hundred ? "hundred" : ""}`} aria-hidden="true">
+                  <span>{burst.title}</span>
+                  <small>{burst.message}</small>
                 </div>
               )}
             </div>

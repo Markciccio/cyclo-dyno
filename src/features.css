@@ -812,16 +812,14 @@
   will-change: transform, opacity;
 }
 .peak-burst span {
-  display: block; font-family: "DM Mono"; font-size: clamp(.8rem, 3.4vw, 1.4rem);
-  letter-spacing: .3em; color: #fff;
-  text-shadow: 0 0 10px #ffb020, 0 0 30px #ff4c1f;
+  display: block; font-family: "Barlow Condensed", Impact, sans-serif; font-weight: 900;
+  font-size: clamp(2.2rem, 9vw, 6.8rem); line-height: .8; letter-spacing: .04em; color: #fff;
+  text-shadow: 0 0 8px #fff, 0 0 18px #ffdb1a, 0 0 42px #ff7a00, 0 0 88px #e40000;
 }
-.peak-burst b {
-  display: block; font-size: clamp(3.4rem, 17vw, 9rem); line-height: .85;
-  letter-spacing: -.05em; color: #fff3a0;
-  text-shadow: 0 0 14px #fff, 0 0 40px #ffca10, 0 0 90px #ff4415, 0 0 160px #e40000;
-}
-.peak-burst b em { font-size: .3em; font-style: normal; margin-left: .1em; }
+.peak-burst small { display: block; margin-top: .45rem; font: 800 clamp(.62rem, 2.8vw, 1.25rem) "DM Mono"; letter-spacing: .17em; color: #fff7b1; text-shadow: 0 0 10px #ff6400; }
+.peak-burst.burst-top5 span { color: #fff7a0; text-shadow: 0 0 8px #fff, 0 0 24px #ffe100, 0 0 58px #ff4a00, 0 0 120px #e40000; }
+.peak-burst.burst-hold span { color: #dffaff; text-shadow: 0 0 8px #fff, 0 0 22px #18d9ff, 0 0 55px #087eb5, 0 0 105px #004d95; }
+.peak-burst.burst-hold small { color: #8decff; text-shadow: 0 0 10px #007ed1; }
 @keyframes peakBurst {
   0%   { opacity: 0; transform: translate(-50%, -50%) scale(.45) rotate(-6deg); }
   22%  { opacity: 1; transform: translate(-50%, -50%) scale(1.16) rotate(2deg); }
@@ -830,7 +828,7 @@
 }
 /* Sfondare un centinaio di watt merita un lampo più grosso e un alone. */
 .peak-burst.hundred { animation-duration: 1.5s; }
-.peak-burst.hundred b { font-size: clamp(4.6rem, 25vw, 13rem); color: #fff; }
+.peak-burst.hundred span { font-size: clamp(2.6rem, 11vw, 8rem); color: #fff; }
 .peak-burst.hundred::before {
   content: ""; position: absolute; left: 50%; top: 50%; width: 130vw; height: 130vw;
   transform: translate(-50%, -50%); border-radius: 50%; z-index: -1;
