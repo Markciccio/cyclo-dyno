@@ -808,7 +808,7 @@
 .peak-burst {
   position: absolute; z-index: 30; left: 50%; top: 38%;
   transform: translate(-50%, -50%); text-align: center; pointer-events: none;
-  animation: peakBurst 1.05s cubic-bezier(.16, .9, .3, 1) forwards;
+  animation: peakBurst 2.2s cubic-bezier(.16, .9, .3, 1) forwards;
   will-change: transform, opacity;
 }
 .peak-burst span {
@@ -822,18 +822,18 @@
 .peak-burst.burst-hold small { color: #8decff; text-shadow: 0 0 10px #007ed1; }
 @keyframes peakBurst {
   0%   { opacity: 0; transform: translate(-50%, -50%) scale(.45) rotate(-6deg); }
-  22%  { opacity: 1; transform: translate(-50%, -50%) scale(1.16) rotate(2deg); }
-  42%  { opacity: 1; transform: translate(-50%, -50%) scale(1) rotate(0deg); }
+  14%  { opacity: 1; transform: translate(-50%, -50%) scale(1.16) rotate(2deg); }
+  28%, 78%  { opacity: 1; transform: translate(-50%, -50%) scale(1) rotate(0deg); }
   100% { opacity: 0; transform: translate(-50%, -132%) scale(1.5) rotate(0deg); }
 }
 /* Sfondare un centinaio di watt merita un lampo più grosso e un alone. */
-.peak-burst.hundred { animation-duration: 1.5s; }
+.peak-burst.hundred { animation-duration: 2.5s; }
 .peak-burst.hundred span { font-size: clamp(2.6rem, 11vw, 8rem); color: #fff; }
 .peak-burst.hundred::before {
   content: ""; position: absolute; left: 50%; top: 50%; width: 130vw; height: 130vw;
   transform: translate(-50%, -50%); border-radius: 50%; z-index: -1;
   background: radial-gradient(closest-side, #ff8a0055, #ff2d0022 45%, transparent 70%);
-  animation: peakShock 1.5s ease-out forwards;
+  animation: peakShock 2.5s ease-out forwards;
 }
 @keyframes peakShock {
   0% { opacity: .9; transform: translate(-50%, -50%) scale(.12); }
