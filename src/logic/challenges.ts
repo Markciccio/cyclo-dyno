@@ -92,7 +92,7 @@ function fromTrack(id: ChallengeId, label: string, note: string, powerRangeWatts
 }
 
 export const challenges: Record<ChallengeId, ChallengeSpec> = {
-  dyno: { label: "DYNO SPRINT", lap: false, powerRangeWatts: 750, description: "Prova a tempo" },
+  dyno: { label: "DYNO SPRINT", lap: false, powerRangeWatts: 600, description: "Prova a tempo" },
   monza: fromTrack("monza", "MONZA LAP", "1 giro · 5,794 km · 11 curve"),
   velodrome: fromTrack("velodrome", "VELODROMO", "1 giro · 400 m", 500),
   mottarone: fromTrack("mottarone", "MOTTARONE", "Armeno → vetta · 11,7 km · 7,7%", 500),

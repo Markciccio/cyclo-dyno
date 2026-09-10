@@ -69,7 +69,7 @@ const deltaLabel = (seconds: number | undefined) => {
   return `${rounded > 0 ? "+" : ""}${rounded}s`;
 };
 const powerLevel = (w: number) =>
-  w > 750
+  w > 600
     ? "power-extra"
     : w >= 500
     ? "power-red"
@@ -458,7 +458,7 @@ export function App() {
               title: holdMessages[burstId.current % holdMessages.length],
               message: "TOP 3 SECONDI IN CORSO",
               kind: "hold",
-              hundred: current3 > 750,
+              hundred: current3 > 600,
             };
           }
           // Dopo un tratto forte, un calo netto merita un solo invito a
