@@ -219,11 +219,9 @@ export function App() {
         oscillator.stop(when + duration + .02);
       };
       if (kind === "countdown") {
-        // Tre brevi salite di giri: un richiamo alla partenza di una F1.
-        const base = countStep === 3 ? 105 : countStep === 2 ? 155 : 225;
-        tone(base, at, .34, .065, "sawtooth", base * 2.3);
-        tone(base * .5, at, .34, .045, "sawtooth", base * .9);
-        crackle(at, .18, .025, 220);
+        // Semaforo: tre bip netti e crescenti, senza ruggito di motore.
+        const frequency = countStep === 3 ? 620 : countStep === 2 ? 760 : 920;
+        tone(frequency, at, .11, .09, "square");
       } else if (kind === "go") {
         // Boost di partenza: botto basso, scia di turbo e piccola scintilla.
         crackle(at, .42, .15, 900);
