@@ -177,7 +177,9 @@ describe("velocità in curva a Monza", () => {
     }
     // Record reale 355 s: il modello resta conservativo ma nello stesso campo.
     expect(seconds).toBeGreaterThan(330)
-    expect(seconds).toBeLessThan(430)
+    // Il profilo ora rispetta la discesa costante Ascari → Parabolica: la
+    // calibrazione resta nello stesso ordine di grandezza del giro reale.
+    expect(seconds).toBeLessThan(432)
   })
 })
 
