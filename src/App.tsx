@@ -183,33 +183,69 @@ export function App() {
       <button className="install" onClick={installApp}>⇩ INSTALLA</button>
     </nav>
   );
-  function playCue(kind: "countdown" | "go" | SprintBurst["kind"], spoken?: string) {
+  function playCue(kind: "countdown" | "go" | SprintBurst["kind"], countStep?: number) {
     if (!settings.audio) return;
     try {
       const audio = audioContextRef.current ?? new AudioContext();
       audioContextRef.current = audio;
       void audio.resume();
-      const notes = kind === "countdown" ? [520] : kind === "go" ? [880, 1320] : kind === "top5" ? [660, 880, 1100] : kind === "hold" ? [520, 700] : [780, 980];
-      notes.forEach((frequency, index) => {
+      const at = audio.currentTime + .015;
+      const crackle = (when: number, duration: number, volume: number, color: number) => {
+        const buffer = audio.createBuffer(1, Math.max(1, Math.floor(audio.sampleRate * duration)), audio.sampleRate);
+        const data = buffer.getChannelData(0);
+        for (let i = 0; i < data.length; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / data.length) ** 2;
+        const noise = audio.createBufferSource();
+        const filter = audio.createBiquadFilter();
+        const gain = audio.createGain();
+        noise.buffer = buffer;
+        filter.type = "bandpass";
+        filter.frequency.setValueAtTime(color, when);
+        gain.gain.setValueAtTime(volume, when);
+        gain.gain.exponentialRampToValueAtTime(.0001, when + duration);
+        noise.connect(filter).connect(gain).connect(audio.destination);
+        noise.start(when);
+      };
+      const tone = (frequency: number, when: number, duration: number, volume: number, type: OscillatorType = "sine", endFrequency?: number) => {
         const oscillator = audio.createOscillator();
         const gain = audio.createGain();
-        const at = audio.currentTime + index * .09;
-        oscillator.type = kind === "hold" ? "square" : "sine";
-        oscillator.frequency.setValueAtTime(frequency, at);
-        gain.gain.setValueAtTime(.0001, at);
-        gain.gain.exponentialRampToValueAtTime(kind === "hold" ? .075 : .11, at + .012);
-        gain.gain.exponentialRampToValueAtTime(.0001, at + .12);
+        oscillator.type = type;
+        oscillator.frequency.setValueAtTime(frequency, when);
+        if (endFrequency) oscillator.frequency.exponentialRampToValueAtTime(endFrequency, when + duration);
+        gain.gain.setValueAtTime(.0001, when);
+        gain.gain.exponentialRampToValueAtTime(volume, when + .012);
+        gain.gain.exponentialRampToValueAtTime(.0001, when + duration);
         oscillator.connect(gain).connect(audio.destination);
-        oscillator.start(at);
-        oscillator.stop(at + .14);
-      });
-      if (spoken && "speechSynthesis" in window) {
-        window.speechSynthesis.cancel();
-        const utterance = new SpeechSynthesisUtterance(spoken);
-        utterance.lang = "it-IT";
-        utterance.rate = 1.18;
-        utterance.pitch = 1.12;
-        window.speechSynthesis.speak(utterance);
+        oscillator.start(when);
+        oscillator.stop(when + duration + .02);
+      };
+      if (kind === "countdown") {
+        // Tre brevi salite di giri: un richiamo alla partenza di una F1.
+        const base = countStep === 3 ? 105 : countStep === 2 ? 155 : 225;
+        tone(base, at, .34, .065, "sawtooth", base * 2.3);
+        tone(base * .5, at, .34, .045, "sawtooth", base * .9);
+        crackle(at, .18, .025, 220);
+      } else if (kind === "go") {
+        // Boost di partenza: botto basso, scia di turbo e piccola scintilla.
+        crackle(at, .42, .15, 900);
+        tone(74, at, .34, .15, "sawtooth", 38);
+        tone(520, at + .05, .32, .075, "square", 1700);
+        crackle(at + .12, .12, .055, 3100);
+      } else if (kind === "top5") {
+        // Fuochi artificiali: tre scoppi con stelle acute.
+        [0, .12, .25].forEach((offset, index) => {
+          crackle(at + offset, .24, .11, 1500 + index * 700);
+          tone(760 + index * 170, at + offset, .28, .075, "sine", 1480 + index * 210);
+        });
+      } else if (kind === "hold") {
+        // Motore in tiro, secco e ripetuto: invita a non mollare.
+        tone(155, at, .13, .09, "square", 330);
+        tone(190, at + .16, .13, .09, "square", 410);
+        crackle(at + .06, .08, .035, 1700);
+      } else {
+        // Picco istantaneo: esplosione brillante, più due scintille alte.
+        crackle(at, .3, .13, 2100);
+        tone(430, at, .22, .1, "sawtooth", 1220);
+        tone(1240, at + .08, .17, .065, "sine", 2080);
       }
     } catch { /* L'audio è un extra: la prova continua anche nei browser che lo bloccano. */ }
   }
@@ -292,12 +328,12 @@ export function App() {
     setLapFlash(undefined);
     setCount(3);
     setView("countdown");
-    playCue("countdown");
+    playCue("countdown", 3);
     let n = 3;
     const i = window.setInterval(() => {
       n--;
       setCount(n);
-      playCue(n ? "countdown" : "go");
+      playCue(n ? "countdown" : "go", n);
       if (!n) {
         clearInterval(i);
         startSession();
@@ -389,7 +425,7 @@ export function App() {
         if (feedback) {
           lastCoachRef.current = x.timestamp;
           setBurst({ ...feedback, id: burstId.current++ });
-          playCue(feedback.kind, feedback.kind === "hold" || feedback.kind === "top5" ? feedback.title : undefined);
+          playCue(feedback.kind);
         }
         sRef.current.push(y);
         if (track && dt > 0 && isVehicleGhost(ghostRef.current)) {
