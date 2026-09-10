@@ -59,9 +59,10 @@ type SprintBurst = {
   id: number;
   title: string;
   message: string;
-  kind: "peak" | "top5" | "hold";
+  kind: "peak" | "hold";
   hundred: boolean;
 };
+const POWER_REFRESH_MS = 2000;
 const holdMessages = [
   "TIENI LA POTENZA!",
   "DAI TUTTO!",
@@ -139,7 +140,6 @@ export function App() {
     rivalSpeedRef = useRef(0),
     rivalMetersRef = useRef(0),
     peakRef = useRef(0),
-    best5Ref = useRef(0),
     best3Ref = useRef(0),
     lastBurstRef = useRef(0),
     lastCoachRef = useRef(0),
@@ -236,12 +236,6 @@ export function App() {
         tone(74, at, .34, .15, "sawtooth", 38);
         tone(520, at + .05, .32, .075, "square", 1700);
         crackle(at + .12, .12, .055, 3100);
-      } else if (kind === "top5") {
-        // Fuochi artificiali: tre scoppi con stelle acute.
-        [0, .12, .25].forEach((offset, index) => {
-          crackle(at + offset, .24, .11, 1500 + index * 700);
-          tone(760 + index * 170, at + offset, .28, .075, "sine", 1480 + index * 210);
-        });
       } else if (kind === "hold") {
         // Motore in tiro, secco e ripetuto: invita a non mollare.
         tone(155, at, .13, .09, "square", 330);
@@ -330,7 +324,6 @@ export function App() {
     rivalMetersRef.current = 0;
     setRivalMeters(0);
     peakRef.current = 0;
-    best5Ref.current = 0;
     best3Ref.current = 0;
     lastBurstRef.current = 0;
     lastCoachRef.current = 0;
@@ -408,23 +401,12 @@ export function App() {
             };
           }
         }
-        // Nello Sprint il feedback guarda le finestre reali e non il singolo
-        // campione: così sprona a tenere lo sforzo, non a dare un colpo secco.
+        // Nello Sprint l'incoraggiamento guarda una finestra reale di 3 s:
+        // sprona a tenere lo sforzo, senza aggiungere avvisi Top 5 affollati.
         if (challenge === "dyno") {
           const nextSamples = [...sRef.current, y];
           const current3 = trailingPower(nextSamples, 3);
-          const current5 = trailingPower(nextSamples, 5);
           const hasThreeSeconds = elapsed >= 3000;
-          const hasFiveSeconds = elapsed >= 5000;
-          const newTop5 = hasFiveSeconds && current5 > best5Ref.current + 3;
-          if (newTop5) {
-            best5Ref.current = current5;
-            if (feedback) {
-              feedback = { ...feedback, message: "TOP 5 SECONDI • DAI TUTTO!", kind: "top5", hundred: true };
-            } else {
-              feedback = { title: "TOP 5 SECONDI!", message: "RECORD IN CORSO • NON MOLLARE!", kind: "top5", hundred: false };
-            }
-          }
           if (hasThreeSeconds && current3 > best3Ref.current) best3Ref.current = current3;
           const holdingNearTop = hasThreeSeconds && current3 >= Math.max(450, best3Ref.current * 0.94);
           if (!feedback && holdingNearTop && x.timestamp - lastCoachRef.current > 2400) {
@@ -468,7 +450,7 @@ export function App() {
           lastSpeedPaint.current = x.timestamp;
           setDisplaySpeed(speed);
         }
-        if (x.timestamp - lastPowerPaint.current >= 2000) {
+        if (x.timestamp - lastPowerPaint.current >= POWER_REFRESH_MS) {
           lastPowerPaint.current = x.timestamp;
           setDisplayPower(x.powerWatts);
         }
