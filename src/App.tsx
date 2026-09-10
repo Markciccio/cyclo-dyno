@@ -510,26 +510,24 @@ export function App() {
                 </div>
               )}
             </div>
-            <div className="sprint-power">
-              <div className="sprint-cell">
-                <label>POTENZA</label>
-                <strong className={`power-readout ${powerLevel(displayPower)}`}>
-                  {displayPower}<em>W</em>
-                </strong>
-              </div>
-              <div className="sprint-cell">
-                <label>BEST 5 SEC</label>
-                <strong className={`power-readout ${powerLevel(liveBest5s ?? 0)}`}>
-                  {liveBest5s === null ? "--" : Math.round(liveBest5s)}<em>W</em>
-                </strong>
-              </div>
+            <div className="sprint-primary">
+              <label>POTENZA LIVE</label>
+              <strong className={`power-readout ${powerLevel(displayPower)}`}>
+                {displayPower}<em>W</em>
+              </strong>
             </div>
             <Gauge power={displayPower} range={activeChallenge.powerRangeWatts} />
-            <div className="sprint-speed">
-              <label>VELOCITÀ</label>
-              <strong className={`speed-readout ${newSpeedPeak ? "speed-peak" : ""}`}>
-                {displaySpeed.toFixed(1)}<em>km/h</em>
-              </strong>
+            <div className="sprint-secondary">
+              <div className="sprint-best">
+                <label>BEST 5 SEC</label>
+                <strong className={powerLevel(liveBest5s ?? 0)}>{liveBest5s === null ? "--" : Math.round(liveBest5s)}<em>W</em></strong>
+              </div>
+              <div className="sprint-speed">
+                <label>VELOCITÀ</label>
+                <strong className={`speed-readout ${newSpeedPeak ? "speed-peak" : ""}`}>
+                  {displaySpeed.toFixed(1)}<em>km/h</em>
+                </strong>
+              </div>
             </div>
             <PowerChart samples={samples} />
             <section className="metrics">
@@ -574,13 +572,10 @@ export function App() {
               tone="distance"
             />
             {liveTrack.totalClimb > 150 ? (
-              <Bar
-                n="DISLIVELLO"
-                v={`${Math.round(climbed)}`}
-                u={`/ ${Math.round(liveTrack.totalClimb)} m`}
-                fill={climbed / liveTrack.totalClimb}
-                tone="climb"
-              />
+              <>
+                <Bar n="DISLIVELLO TOTALE" v={`${Math.round(liveTrack.totalClimb)}`} u="m D+" fill={climbed / liveTrack.totalClimb} tone="climb" />
+                <Bar n="RIMANENTE" v={`${Math.round(Math.max(0, liveTrack.totalClimb - climbed))}`} u="m D+" fill={1 - climbed / liveTrack.totalClimb} tone="climb" />
+              </>
             ) : (
               // Su un anello piatto la mappa non mostra la pendenza: qui serve ancora.
               <Bar
