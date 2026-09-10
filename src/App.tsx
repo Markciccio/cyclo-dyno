@@ -418,7 +418,7 @@ export function App() {
           if (hundred || x.timestamp - lastBurstRef.current > 700) {
             lastBurstRef.current = x.timestamp;
             feedback = {
-              title: "NUOVO PICCO!",
+              title: `NUOVO PICCO: ${Math.round(x.powerWatts)} W!`,
               message: hundred ? "POTENZA FUORI SCALA!" : "CONTINUA COSÌ!",
               kind: "peak",
               hundred,
