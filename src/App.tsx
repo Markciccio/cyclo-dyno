@@ -510,7 +510,7 @@ export function App() {
                 </div>
               )}
             </div>
-            <div className="sprint-primary">
+            <div className={`sprint-primary ${powerLevel(displayPower)}`}>
               <label>POTENZA LIVE</label>
               <strong className={`power-readout ${powerLevel(displayPower)}`}>
                 {displayPower}<em>W</em>
