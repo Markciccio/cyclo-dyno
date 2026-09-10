@@ -60,11 +60,11 @@ const GRADE_WINDOW_METERS = 100
 const MONZA_PROFILE: readonly (readonly [number, number])[] = [
   [0, 190],
   [3000, 220], // rettilineo / Lesmo: +30 m in ~3 km, cioè circa +1%
-  [3300, 220], // tra le due Lesmo è sostanzialmente pianura
-  [3600, 205], // discesa dopo Lesmo 2
-  [3800, 211], // breve risalita verso il sottopasso
-  [3941, 210], // ingresso Ascari, quasi regolare
-  [5119, 198], // Ascari → ingresso Parabolica: -12 m in 1,178 km ≈ -1,0%
+  [3300, 215.5], // dopo Lesmo 2: prima cuvetta, -1,5%
+  [3700, 201.5], // cuvetta → ponte sopraelevata: -3,5%
+  [3941, 203.9], // ponte → Ascari: +1%
+  [4177, 203.9], // Ascari: sostanzialmente pianura
+  [5119, 196], // verso la Parabolica: discesa dolce, circa -1%
   [5794.1, 190], // fine Parabolica / traguardo: chiude senza scalino
 ];
 function monzaElevation(meters: number) {
