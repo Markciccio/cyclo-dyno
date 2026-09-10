@@ -45,6 +45,29 @@ type InstallPromptEvent = Event & { prompt: () => Promise<void>; userChoice: Pro
 type ScreenLock = { release: () => Promise<void>; released: boolean };
 const fmt = (n: number | null, u = "W") =>
   n === null ? "--" : `${Math.round(n)} ${u}`;
+type StoredLapReference = { session: DynoSession; lap: Lap };
+
+/** Il primato di pista è costruito soltanto dai giri realmente registrati,
+ * mai da una demo: il riferimento resta quindi credibile anche tra sessioni. */
+function bestRecordedLap(sessions: DynoSession[], challenge: ChallengeId): StoredLapReference | undefined {
+  return sessions.reduce<StoredLapReference | undefined>((best, session) => {
+    if (
+      (session.challenge ?? "dyno") !== challenge ||
+      session.dataSource === "demo" ||
+      !session.validSession
+    ) return best;
+    const lap = bestLap(session.laps ?? []);
+    if (!lap || (best && best.lap.seconds <= lap.seconds)) return best;
+    return { session, lap };
+  }, undefined);
+}
+const deltaLabel = (seconds: number | undefined) => {
+  if (seconds === undefined || !Number.isFinite(seconds)) return "--";
+  // Il confronto deve essere leggibile al volo: un valore ogni secondo, non
+  // una cascata di decimi che lampeggiano mentre si pedala.
+  const rounded = Math.round(seconds);
+  return `${rounded > 0 ? "+" : ""}${rounded}s`;
+};
 const powerLevel = (w: number) =>
   w > 750
     ? "power-extra"
@@ -466,7 +489,10 @@ export function App() {
           });
           lapsRef.current = [...lapsRef.current, lap];
           setLaps(lapsRef.current);
-          setLapFlash({ lap, rank: lapRank(lap.seconds, lapsRef.current), total: lapsRef.current.length });
+          // Nel Velodromo i due delta rimangono sempre visibili: il vecchio
+          // pannello a fine giro avrebbe nascosto proprio il confronto live.
+          if (challenge !== "velodrome")
+            setLapFlash({ lap, rank: lapRank(lap.seconds, lapsRef.current), total: lapsRef.current.length });
           lapStartMs.current = elapsed;
           lapStartKm.current = distance;
         }
@@ -567,6 +593,20 @@ export function App() {
     const sampledSeconds = (samples.at(-1)?.elapsedMs ?? 0) / 1000;
     const averageSpeedKmh = sampledSeconds > 0 ? (metersDone / 1000) / (sampledSeconds / 3600) : 0;
     const showTrackAverages = challenge === "monza" || challenge === "velodrome";
+    const sessionBestLap = challenge === "velodrome" ? bestLap(laps) : undefined;
+    const absoluteVelodromeLap = challenge === "velodrome" ? bestRecordedLap(sessions, "velodrome") : undefined;
+    const metersIntoLap = Math.max(0, metersDone - lapStartKm.current * 1000);
+    const currentLapSeconds = Math.max(0, clock - lapStartMs.current / 1000);
+    // Entrambi i riferimenti sono confrontati nello stesso punto dell'anello,
+    // non al traguardo: perciò il delta è utile in ogni secondo del giro.
+    const sessionLapDelta =
+      sessionBestLap && metersIntoLap > 2
+        ? currentLapSeconds - lapSecondsAt(samples, sessionBestLap, metersIntoLap)
+        : undefined;
+    const absoluteLapDelta =
+      absoluteVelodromeLap && metersIntoLap > 2
+        ? currentLapSeconds - lapSecondsAt(absoluteVelodromeLap.session.samples, absoluteVelodromeLap.lap, metersIntoLap)
+        : undefined;
     const ghostMeters =
       ghost === "none"
         ? undefined
@@ -625,7 +665,21 @@ export function App() {
           onGhostChange={selectGhost}
           running
         />
-        {lapFlash && (
+        {challenge === "velodrome" && (
+          <section className="velodrome-deltas" aria-live="polite">
+            <div className={`velodrome-delta ${sessionLapDelta !== undefined && sessionLapDelta <= 0 ? "ahead" : "behind"}`}>
+              <label>Δ BEST SESSIONE</label>
+              <strong>{deltaLabel(sessionLapDelta)}</strong>
+              <small>{sessionBestLap ? `riferimento ${formatLapTime(sessionBestLap.seconds)}` : "chiudi il primo giro"}</small>
+            </div>
+            <div className={`velodrome-delta ${absoluteLapDelta !== undefined && absoluteLapDelta <= 0 ? "ahead" : "behind"}`}>
+              <label>Δ RECORD ASSOLUTO</label>
+              <strong>{deltaLabel(absoluteLapDelta)}</strong>
+              <small>{absoluteVelodromeLap ? `${absoluteVelodromeLap.session.participantName} · ${formatLapTime(absoluteVelodromeLap.lap.seconds)}` : "nessun record reale"}</small>
+            </div>
+          </section>
+        )}
+        {lapFlash && challenge !== "velodrome" && (
           <section key={lapFlash.lap.index} className={`lap-flash ${lapFlash.rank === 1 ? "best" : ""}`}>
             <header>
               <b>GIRO {lapFlash.lap.index}</b>
@@ -852,7 +906,16 @@ export function App() {
             }}
           />
           <h2>DEMO</h2>
-          <Table challenge={challenge} sessions={demor} />
+          <Table
+            challenge={challenge}
+            sessions={demor}
+            onDelete={async (id) => {
+              if (confirm("Eliminare demo?")) {
+                await sessionRepo.delete(id);
+                setSessions(await sessionRepo.getAll());
+              }
+            }}
+          />
           <div className="actions">
             <button
               onClick={() =>
@@ -881,6 +944,19 @@ export function App() {
               }
             >
               EXPORT JSON
+            </button>
+            <button
+              className="danger"
+              onClick={async () => {
+                const toDelete = sessions.filter((session) => (session.challenge ?? "dyno") === challenge);
+                if (!toDelete.length) return;
+                if (confirm(`Cancellare tutti i ${toDelete.length} record di ${activeChallenge.label}, incluse le demo?`)) {
+                  await Promise.all(toDelete.map((session) => sessionRepo.delete(session.id)));
+                  setSessions(await sessionRepo.getAll());
+                }
+              }}
+            >
+              CANCELLA TUTTI I RECORD
             </button>
           </div>
         </section>
@@ -1113,13 +1189,14 @@ function Table({
 }) {
   const timed = challenge !== "dyno";
   return (
-    <div className="table">
+    <div className={`table ${onDelete ? "with-actions" : ""}`}>
       <div className="tr head">
         <span>POS</span>
         <span>NAME</span>
         <span>{timed ? "TEMPO" : "BEST 5S"}</span>
         <span>{timed ? "MEZZO" : "PEAK"}</span>
         <span>AVG</span>
+        {onDelete && <span>ELIMINA</span>}
       </div>
       {sessions.length ? (
         sessions.map((s, i) => (

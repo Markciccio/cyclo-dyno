@@ -922,6 +922,22 @@
 .lap-flash dl { display: grid; grid-template-columns: repeat(4, 1fr); gap: .2rem .5rem; margin: .3rem 0 0; border: 0; }
 .lap-flash dt { padding: 0; border: 0; font-size: .5rem; letter-spacing: .08em; color: #8b96a3; }
 .lap-flash dd { padding: 0; border: 0; font-size: .95rem; color: #dff8ff; }
+
+/* Velodromo: cronometro di giro contro i due riferimenti, sempre sotto
+   l'immagine della pista e senza occupare la visuale con un popup. */
+.velodrome-deltas {
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .35rem;
+  max-width: 680px; margin: .35rem auto; font-family: "DM Mono";
+}
+.velodrome-delta {
+  min-width: 0; padding: .4rem .55rem; border: 1px solid #30414b;
+  border-left: 3px solid #ff6a4a; background: linear-gradient(110deg, #10171d, #0a0e12);
+}
+.velodrome-delta.ahead { border-left-color: #48ed92; background: linear-gradient(110deg, #102019, #0a0e12); }
+.velodrome-delta label { display: block; font-size: .56rem; letter-spacing: .09em; color: #9baab5; }
+.velodrome-delta strong { display: block; font: 800 clamp(1.35rem, 4.2vw, 2.25rem) "Barlow Condensed"; line-height: .95; color: #ff6a4a; }
+.velodrome-delta.ahead strong { color: #48ed92; text-shadow: 0 0 13px #19ff6a77; }
+.velodrome-delta small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: .18rem; color: #8b96a3; font-size: .53rem; }
 @keyframes lapIn { from { opacity: 0; transform: translateY(-14px) scale(.97); } }
 @keyframes lapOut { to { opacity: 0; transform: translateY(-8px); } }
 @media (prefers-reduced-motion: reduce) { .lap-flash { animation: none; } }
@@ -941,6 +957,10 @@
   .lap-flash dd { font-size: .8rem; }
   .lap-table { font-size: .62rem; }
   .lap-table .tr { gap: .2rem; padding: .4rem .2rem; }
+  .velodrome-deltas { gap: .25rem; margin: .25rem auto; }
+  .velodrome-delta { padding: .3rem .4rem; }
+  .velodrome-delta label { font-size: .48rem; }
+  .velodrome-delta strong { font-size: 1.45rem; }
 }
 
 /* ===== l'annuncio del giro si sovrappone alla mappa invece di spingere il resto ===== */
@@ -968,6 +988,16 @@
   .dyno header > b small { font-size: .55rem; }
 }
 .live b { font-weight: 400; color: #d8ff22; }
+
+/* Una colonna dedicata evita che la × finisca fuori dalla classifica. */
+.table.with-actions .tr { grid-template-columns: .4fr 1.8fr 1fr 1fr 1fr .7fr; }
+.table.with-actions .tr > button { justify-self: start; font-size: 1.2rem; line-height: 1; }
+
+/* Sprint: il wattaggio resta il protagonista assoluto. */
+.sprint-primary .power-readout { font-size: clamp(11.5rem, 52vw, 36rem) !important; }
+@media (max-width: 520px) {
+  .sprint-primary .power-readout { font-size: clamp(11rem, 55vw, 16rem) !important; }
+}
 
 /* Il riquadro del giro lascia libera la colonna dei mezzi sulla destra. */
 @media (max-width: 520px) {
