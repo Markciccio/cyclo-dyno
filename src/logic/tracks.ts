@@ -54,17 +54,17 @@ const GRADE_WINDOW_METERS = 100
 /**
  * Profilo volutamente regolarizzato per Monza. I dati altimetrici raster fanno
  * apparire molte gobbe di 1–3 m che sull'asfalto non si percepiscono; qui il
- * giro sale in modo continuo fino a Lesmo 1 (~20 m), resta quasi piatto alle
+ * giro sale in modo continuo fino a Lesmo 1 (~10 m), resta quasi piatto alle
  * Lesmo e poi segue i lunghi tratti di discesa/raccordo fino alla Parabolica.
  */
 const MONZA_PROFILE: readonly (readonly [number, number])[] = [
   [0, 190],
-  [3000, 210], // salita iniziale attenuata: compromesso fra quota reale e GPS
-  [3300, 208], // dopo Lesmo 2: prima cuvetta
-  [3700, 198], // cuvetta → ponte sopraelevata, tratto più deciso
-  [3941, 201], // ponte → Ascari, breve risalita
-  [4177, 201], // Ascari: sostanzialmente pianura
-  [5119, 193], // verso la Parabolica: discesa dolce
+  [3000, 200.5], // salita iniziale: +10,5 m, coerente con i giri GPS disponibili
+  [3300, 199.4], // dopo Lesmo 2: prima cuvetta
+  [3700, 194], // cuvetta → ponte sopraelevata, tratto più deciso
+  [3941, 195.5], // ponte → Ascari, breve risalita (+1,5 m)
+  [4177, 195.5], // Ascari: sostanzialmente pianura
+  [5119, 191.5], // verso la Parabolica: discesa dolce
   [5794.1, 190], // fine Parabolica / traguardo: chiude senza scalino
 ];
 function monzaElevation(meters: number) {
