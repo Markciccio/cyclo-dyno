@@ -23,7 +23,7 @@ const labels: Record<string, string> = {
   mottarone: "MOTTARONE · SALITA DA ARMENO",
 };
 /** Metri di strada che si vogliono vedere attorno al mezzo mentre si corre. */
-const FOLLOW_SPAN_METERS = 55;
+const followSpanMeters = (challenge: ChallengeId) => challenge === "monza" ? 120 : 55;
 /** Oltre questo livello Esri non ha piastrelle native e le ingrandisce. */
 const MAX_ZOOM = 20;
 
@@ -174,7 +174,7 @@ export function TrackMap({
   // All'avvio si stringe sul mezzo, alla fine si torna a inquadrare tutto il percorso.
   useEffect(() => {
     if (!map.current || !track) return;
-    if (running && here) map.current.setView([here.lat, here.lon], zoomForSpan(map.current, here.lat, FOLLOW_SPAN_METERS), { animate: true });
+    if (running && here) map.current.setView([here.lat, here.lon], zoomForSpan(map.current, here.lat, followSpanMeters(challenge)), { animate: true });
     else map.current.fitBounds(L.latLngBounds(track.points.map((p) => [p.lat, p.lon] as L.LatLngExpression)), { padding: [24, 24] });
     // Solo il passaggio fermo/in corsa deve reinquadrare, non ogni spostamento.
     // eslint-disable-next-line react-hooks/exhaustive-deps
