@@ -51,6 +51,34 @@ const CURVATURE_WINDOW_METERS = 50
  */
 const GRADE_WINDOW_METERS = 100
 
+/**
+ * Profilo volutamente regolarizzato per Monza. I dati altimetrici raster fanno
+ * apparire molte gobbe di 1–3 m che sull'asfalto non si percepiscono; qui il
+ * giro sale in modo continuo fino a Lesmo 1 (~30 m), resta quasi piatto alle
+ * Lesmo e poi segue i lunghi tratti di discesa/raccordo fino alla Parabolica.
+ */
+const MONZA_PROFILE: readonly (readonly [number, number])[] = [
+  [0, 190],
+  [2498, 220], // Prima di Lesmo: +30 m dal traguardo / rettilineo
+  [2863, 220], // tra le due Lesmo è sostanzialmente pianura
+  [3300, 205], // discesa dopo Lesmo 2
+  [3600, 211], // breve risalita verso il sottopasso
+  [3941, 210], // ingresso Ascari, quasi regolare
+  [5119, 195], // lunga discesa Ascari → Parabolica
+  [5794.1, 190], // fine Parabolica / traguardo: chiude senza scalino
+];
+function monzaElevation(meters: number) {
+  for (let i = 1; i < MONZA_PROFILE.length; i++) {
+    const [endMeters, endElevation] = MONZA_PROFILE[i];
+    if (meters <= endMeters) {
+      const [startMeters, startElevation] = MONZA_PROFILE[i - 1];
+      const fraction = (meters - startMeters) / (endMeters - startMeters);
+      return startElevation + (endElevation - startElevation) * fraction;
+    }
+  }
+  return MONZA_PROFILE.at(-1)![1];
+}
+
 function buildTrack(id: TrackId): Track {
   const raw = rawTracks[id]
   const [lat0, lon0] = raw.points[0]
@@ -63,6 +91,9 @@ function buildTrack(id: TrackId): Track {
     cumulative.push(cumulative[i - 1] + Math.hypot(xs[i][0] - xs[i - 1][0], xs[i][1] - xs[i - 1][1]))
   }
   const step = raw.lengthMeters / (raw.closed ? n : n - 1)
+  const elevation = id === "monza"
+    ? raw.elevation.map((_, i) => monzaElevation(i * step))
+    : raw.elevation
   // Su un anello gli indici ruotano, su un punto-a-punto si fermano ai capi.
   const wrap = (i: number) => (raw.closed ? ((i % n) + n) % n : Math.min(n - 1, Math.max(0, i)))
   /**
@@ -85,7 +116,7 @@ function buildTrack(id: TrackId): Track {
     const exact = Math.max(0, Math.min(raw.lengthMeters, meters)) / step
     const i = wrap(Math.floor(exact))
     const j = wrap(i + 1)
-    return raw.elevation[i] + (raw.elevation[j] - raw.elevation[i]) * (exact - Math.floor(exact))
+    return elevation[i] + (elevation[j] - elevation[i]) * (exact - Math.floor(exact))
   }
 
   const points: TrackPoint[] = []
@@ -93,7 +124,7 @@ function buildTrack(id: TrackId): Track {
   for (let i = 0; i < n; i++) {
     const prev = wrap(i - 1)
     const next = wrap(i + 1)
-    if (i > 0) climb += Math.max(0, raw.elevation[i] - raw.elevation[i - 1])
+    if (i > 0) climb += Math.max(0, elevation[i] - elevation[i - 1])
 
     const back = Math.max(0, i * step - GRADE_WINDOW_METERS / 2)
     const ahead = Math.min(raw.lengthMeters, i * step + GRADE_WINDOW_METERS / 2)
@@ -114,7 +145,7 @@ function buildTrack(id: TrackId): Track {
       lon: raw.points[i][1],
       x: xs[i][0],
       y: xs[i][1],
-      elevation: raw.elevation[i],
+      elevation: elevation[i],
       grade,
       radius,
       bearing: ((Math.atan2(dx, dy) * 180) / Math.PI + 360) % 360,
@@ -127,8 +158,8 @@ function buildTrack(id: TrackId): Track {
     lengthMeters: raw.lengthMeters,
     points,
     totalClimb: climb,
-    minElevation: Math.min(...raw.elevation),
-    maxElevation: Math.max(...raw.elevation),
+    minElevation: Math.min(...elevation),
+    maxElevation: Math.max(...elevation),
   }
 }
 
