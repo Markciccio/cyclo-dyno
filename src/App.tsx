@@ -181,7 +181,7 @@ export function App() {
     best3Ref = useRef(0),
     lastBurstRef = useRef(0),
     lastCoachRef = useRef(0),
-    dropAlertedRef = useRef(false),
+    lastDropRef = useRef(0),
     burstId = useRef(0),
     lapsRef = useRef<Lap[]>([]),
     lapStartMs = useRef(0),
@@ -370,7 +370,7 @@ export function App() {
     best3Ref.current = 0;
     lastBurstRef.current = 0;
     lastCoachRef.current = 0;
-    dropAlertedRef.current = false;
+    lastDropRef.current = 0;
     setBurst(undefined);
     lapsRef.current = [];
     lapStartMs.current = 0;
@@ -461,27 +461,26 @@ export function App() {
               hundred: current3 > 600,
             };
           }
-          // Dopo un tratto forte, un calo netto merita un solo invito a
-          // rilanciare. Si riabilita soltanto quando il ciclista recupera:
-          // niente avvisi ripetuti mentre si sta volutamente recuperando.
+          // Dopo una fase attiva, il calo va intercettato anche nei demo più
+          // morbidi: qui confrontiamo il watt istantaneo col picco raggiunto.
+          // Un richiamo ogni 6,5 s lascia tempo di leggerlo e di reagire.
           const hasMeaningfulDrop =
-            elapsed >= 6000 &&
-            best3Ref.current >= 300 &&
-            current3 < best3Ref.current * 0.62;
-          if (!feedback && hasMeaningfulDrop && !dropAlertedRef.current) {
+            elapsed >= 4000 &&
+            peakRef.current >= 180 &&
+            x.powerWatts < Math.max(80, peakRef.current * 0.72);
+          if (!feedback && hasMeaningfulDrop && x.timestamp - lastDropRef.current >= 6500) {
             feedback = {
               title: dropMessages[burstId.current % dropMessages.length],
-              message: `RILANCIO · ${Math.round(current3)} W ORA`,
+              message: `ORA ${Math.round(x.powerWatts)} W · RILANCIA!`,
               kind: "drop",
               hundred: false,
             };
           }
-          if (current3 >= best3Ref.current * 0.82) dropAlertedRef.current = false;
         }
         // Un solo cartello alla volta: picco o stimolo, massimo uno ogni 2 s.
         if (feedback && x.timestamp - lastCoachRef.current >= ALERT_COOLDOWN_MS) {
           lastCoachRef.current = x.timestamp;
-          if (feedback.kind === "drop") dropAlertedRef.current = true;
+          if (feedback.kind === "drop") lastDropRef.current = x.timestamp;
           setBurst({ ...feedback, id: burstId.current++ });
           playCue(feedback.kind);
         }
