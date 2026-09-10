@@ -877,12 +877,12 @@ export function App() {
             </>
           ) : (
             <>
-              <label>BEST 5 SECONDS</label>
-              <strong>{fmt(result.best5s)}</strong>
+              <label>PICCO POTENZA · VALORE CLASSIFICA</label>
+              <strong>{fmt(result.peakPower)}</strong>
             </>
           )}
           <div className="result-grid">
-            <Metric n="PEAK POWER" v={fmt(result.peakPower)} />
+            <Metric n="BEST 5 SECONDS" v={fmt(result.best5s)} />
             <Metric n="AVG POWER" v={fmt(result.averagePower)} />
             <Metric n="MAX SPEED" v={fmt(result.maxVirtualSpeed, "km/h")} />
             <Metric n="CADENCE MAX" v={fmt(result.maxCadence, "rpm")} />
@@ -926,7 +926,7 @@ export function App() {
         <section className="page">
           <h1>LEADERBOARD · {activeChallenge.label}</h1>
           <p className="sub">
-            {challenge === "dyno" ? "ORDINATA PER BEST 5 SECONDS" : "ORDINATA PER TEMPO SUL PERCORSO"} · SOLO SESSIONI VALID
+            {challenge === "dyno" ? "ORDINATA PER PICCO POTENZA" : "ORDINATA PER TEMPO SUL PERCORSO"} · SOLO SESSIONI VALID
           </p>
           <div className="challenge-tabs">
             {(Object.keys(challenges) as ChallengeId[]).map((id) => (
@@ -1233,8 +1233,8 @@ function Table({
       <div className="tr head">
         <span>POS</span>
         <span>NAME</span>
-        <span>{timed ? "TEMPO" : "BEST 5S"}</span>
-        <span>{timed ? "MEZZO" : "PEAK"}</span>
+        <span>{timed ? "TEMPO" : "PICCO"}</span>
+        <span>{timed ? "MEZZO" : "BEST 5S"}</span>
         <span>AVG</span>
         {onDelete && <span>ELIMINA</span>}
       </div>
@@ -1243,8 +1243,8 @@ function Table({
           <div className="tr" key={s.id}>
             <span>{i + 1}</span>
             <span>{s.participantName}</span>
-            <span>{timed ? (s.completed ? formatLapTime(s.elapsedSeconds ?? 0) : "DNF") : fmt(s.best5s)}</span>
-            <span>{timed ? (s.vehicle ? vehicles[s.vehicle].label : "--") : fmt(s.peakPower)}</span>
+            <span>{timed ? (s.completed ? formatLapTime(s.elapsedSeconds ?? 0) : "DNF") : fmt(s.peakPower)}</span>
+            <span>{timed ? (s.vehicle ? vehicles[s.vehicle].label : "--") : fmt(s.best5s)}</span>
             <span>{fmt(s.averagePower)}</span>
             {onDelete && <button onClick={() => onDelete(s.id)}>×</button>}
           </div>
