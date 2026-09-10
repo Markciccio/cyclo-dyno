@@ -82,6 +82,14 @@
 .satellite-map {
   position: absolute;
   inset: 0;
+  overflow: hidden;
+}
+.satellite-map-canvas {
+  position: absolute;
+  inset: 0;
+  transform-origin: 50% 50%;
+  transition: transform .32s cubic-bezier(.2, .75, .25, 1);
+  will-change: transform;
 }
 .satellite-title {
   position: absolute;

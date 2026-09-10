@@ -195,7 +195,15 @@ export function TrackMap({
         <em>{(progress * 100).toFixed(1)}%</em>
       </div>
       <div className="satellite-stage">
-        <div ref={holder} className="satellite-map" />
+        {/* Il canvas ruota attorno al suo centro, mentre il contenitore taglia
+            gli angoli: a 1,5× non si vedono mai bordi vuoti della mappa. */}
+        <div className="satellite-map">
+          <div
+            ref={holder}
+            className="satellite-map-canvas"
+            style={running && here ? { transform: `rotate(${-here.bearing}deg) scale(1.5)` } : undefined}
+          />
+        </div>
         <TrackOutline
           track={track}
           meters={meters}
