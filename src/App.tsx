@@ -608,8 +608,8 @@ export function App() {
       () => rankFor(sessions.filter((x) => x.validSession), challenge),
       [sessions, challenge],
     ),
-    demor = useMemo(
-      () => rankFor(sessions.filter((x) => x.dataSource === "demo"), challenge),
+    leaderboardSessions = useMemo(
+      () => rankFor(sessions.filter((x) => x.validSession || x.dataSource === "demo"), challenge),
       [sessions, challenge],
     );
   if (view === "countdown")
@@ -964,7 +964,7 @@ export function App() {
         <section className="page">
           <h1>LEADERBOARD · {activeChallenge.label}</h1>
           <p className="sub">
-            {challenge === "dyno" ? "ORDINATA PER PICCO POTENZA" : "ORDINATA PER TEMPO SUL PERCORSO"} · SOLO SESSIONI VALID
+            {challenge === "dyno" ? "ORDINATA PER PICCO POTENZA" : "ORDINATA PER TEMPO SUL PERCORSO"} · DEMO E SESSIONI REALI
           </p>
           <div className="challenge-tabs">
             {(Object.keys(challenges) as ChallengeId[]).map((id) => (
@@ -975,20 +975,9 @@ export function App() {
           </div>
           <Table
             challenge={challenge}
-            sessions={ranked}
+            sessions={leaderboardSessions}
             onDelete={async (id) => {
               if (confirm("Eliminare risultato?")) {
-                await sessionRepo.delete(id);
-                setSessions(await sessionRepo.getAll());
-              }
-            }}
-          />
-          <h2>DEMO</h2>
-          <Table
-            challenge={challenge}
-            sessions={demor}
-            onDelete={async (id) => {
-              if (confirm("Eliminare demo?")) {
                 await sessionRepo.delete(id);
                 setSessions(await sessionRepo.getAll());
               }
@@ -1000,7 +989,7 @@ export function App() {
                 download(
                   `hpv-power-dyno-${challenge}.csv`,
                   "Rank,Name,Date,Challenge,Vehicle,TimeSeconds,DistanceKm,Best5s,Peak,Average,Source,Valid\n" +
-                    ranked
+                    leaderboardSessions
                       .map(
                         (s, i) =>
                           `${i + 1},${s.participantName},${new Date(s.timestamp).toISOString()},${s.challenge ?? "dyno"},${s.vehicle ?? ""},${(s.elapsedSeconds ?? 0).toFixed(1)},${(s.distanceKm ?? 0).toFixed(3)},${s.best5s},${s.peakPower},${s.averagePower},${s.dataSource},${s.validSession}`,
@@ -1274,6 +1263,7 @@ function Table({
         <span>{timed ? "TEMPO" : "PICCO"}</span>
         <span>{timed ? "MEZZO" : "BEST 5S"}</span>
         <span>AVG</span>
+        <span>FONTE</span>
         {onDelete && <span>ELIMINA</span>}
       </div>
       {sessions.length ? (
@@ -1284,7 +1274,8 @@ function Table({
             <span>{timed ? (s.completed ? formatLapTime(s.elapsedSeconds ?? 0) : "DNF") : fmt(s.peakPower)}</span>
             <span>{timed ? (s.vehicle ? vehicles[s.vehicle].label : "--") : fmt(s.best5s)}</span>
             <span>{fmt(s.averagePower)}</span>
-            {onDelete && <button onClick={() => onDelete(s.id)}>×</button>}
+            <span className={s.dataSource === "demo" ? "source-demo" : "source-real"}>{s.dataSource === "demo" ? "DEMO" : "REALE"}</span>
+            {onDelete && <button onClick={() => onDelete(s.id)}>CANCELLA</button>}
           </div>
         ))
       ) : (

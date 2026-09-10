@@ -999,9 +999,13 @@
 }
 .live b { font-weight: 400; color: #d8ff22; }
 
-/* Una colonna dedicata evita che la × finisca fuori dalla classifica. */
-.table.with-actions .tr { grid-template-columns: .4fr 1.8fr 1fr 1fr 1fr .7fr; }
-.table.with-actions .tr > button { justify-self: start; font-size: 1.2rem; line-height: 1; }
+/* Classifica unica: fonte e azione hanno colonne vere, quindi il comando di
+   cancellazione resta visibile anche sul telefono (la tabella scorre). */
+.table .tr { grid-template-columns: .4fr 1.55fr 1fr 1fr .85fr .8fr; min-width: 570px; }
+.table.with-actions .tr { grid-template-columns: .4fr 1.55fr 1fr 1fr .85fr .8fr 1.05fr; min-width: 680px; }
+.table.with-actions .tr > button { justify-self: start; padding: .22rem .35rem; font: .6rem "DM Mono"; letter-spacing: .04em; border: 1px solid #7a2c1d; background: #201110; color: #ff9a83; }
+.table.with-actions .tr > button:hover { border-color: #ff6a4a; color: #fff; }
+.source-demo { color: #9eb2ff; }.source-real { color: #6ef0a4; }
 
 /* Sprint: il wattaggio resta il protagonista assoluto. */
 .sprint-primary .power-readout { font-size: clamp(11.5rem, 52vw, 36rem) !important; }
