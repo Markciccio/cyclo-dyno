@@ -140,6 +140,7 @@ export function App() {
     lapStartMs = useRef(0),
     lapStartKm = useRef(0),
     wakeLockRef = useRef<ScreenLock>(),
+    audioContextRef = useRef<AudioContext>(),
     sessionActiveRef = useRef(false);
   pRef.current = provider;
   useEffect(() => {
@@ -182,11 +183,35 @@ export function App() {
       <button className="install" onClick={installApp}>⇩ INSTALLA</button>
     </nav>
   );
-  function demo() {
-    provider.stop();
-    setProvider(new DemoPowerProvider(challenge));
-    setSource("demo");
-    setNotice("DEMO MODE ATTIVA");
+  function playCue(kind: "countdown" | "go" | SprintBurst["kind"], spoken?: string) {
+    if (!settings.audio) return;
+    try {
+      const audio = audioContextRef.current ?? new AudioContext();
+      audioContextRef.current = audio;
+      void audio.resume();
+      const notes = kind === "countdown" ? [520] : kind === "go" ? [880, 1320] : kind === "top5" ? [660, 880, 1100] : kind === "hold" ? [520, 700] : [780, 980];
+      notes.forEach((frequency, index) => {
+        const oscillator = audio.createOscillator();
+        const gain = audio.createGain();
+        const at = audio.currentTime + index * .09;
+        oscillator.type = kind === "hold" ? "square" : "sine";
+        oscillator.frequency.setValueAtTime(frequency, at);
+        gain.gain.setValueAtTime(.0001, at);
+        gain.gain.exponentialRampToValueAtTime(kind === "hold" ? .075 : .11, at + .012);
+        gain.gain.exponentialRampToValueAtTime(.0001, at + .12);
+        oscillator.connect(gain).connect(audio.destination);
+        oscillator.start(at);
+        oscillator.stop(at + .14);
+      });
+      if (spoken && "speechSynthesis" in window) {
+        window.speechSynthesis.cancel();
+        const utterance = new SpeechSynthesisUtterance(spoken);
+        utterance.lang = "it-IT";
+        utterance.rate = 1.18;
+        utterance.pitch = 1.12;
+        window.speechSynthesis.speak(utterance);
+      }
+    } catch { /* L'audio è un extra: la prova continua anche nei browser che lo bloccano. */ }
   }
   function selectVehicle(next: VehicleProfile) {
     vehicleRef.current = next;
@@ -267,10 +292,12 @@ export function App() {
     setLapFlash(undefined);
     setCount(3);
     setView("countdown");
+    playCue("countdown");
     let n = 3;
     const i = window.setInterval(() => {
       n--;
       setCount(n);
+      playCue(n ? "countdown" : "go");
       if (!n) {
         clearInterval(i);
         startSession();
@@ -362,6 +389,7 @@ export function App() {
         if (feedback) {
           lastCoachRef.current = x.timestamp;
           setBurst({ ...feedback, id: burstId.current++ });
+          playCue(feedback.kind, feedback.kind === "hold" || feedback.kind === "top5" ? feedback.title : undefined);
         }
         sRef.current.push(y);
         if (track && dt > 0 && isVehicleGhost(ghostRef.current)) {
@@ -835,6 +863,14 @@ export function App() {
               ))}
             </select>
           </label>
+          <label className="audio-setting">
+            <input
+              type="checkbox"
+              checked={settings.audio}
+              onChange={(e) => setSettings({ ...settings, audio: e.target.checked })}
+            />
+            EFFETTI AUDIO E COUNTDOWN
+          </label>
           <button
             className="primary"
             onClick={() =>
@@ -959,7 +995,6 @@ export function App() {
             START TEST
           </button>
           <button onClick={connect}>CONNECT ASSIOMA</button>
-          <button onClick={demo}>DEMO MODE</button>
         </div>
         {notice && <p className="notice">{notice}</p>}
       </section>
