@@ -506,7 +506,6 @@ export function App() {
               {burst && (
                 <div key={burst.id} className={`peak-burst ${burst.hundred ? "hundred" : ""}`} aria-hidden="true">
                   <span>NUOVO PICCO</span>
-                  <b>{burst.watts}<em>W</em></b>
                 </div>
               )}
             </div>
