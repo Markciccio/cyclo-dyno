@@ -82,7 +82,7 @@ type SprintBurst = {
   id: number;
   title: string;
   message: string;
-  kind: "peak" | "hold";
+  kind: "peak" | "hold" | "drop";
   hundred: boolean;
 };
 const POWER_REFRESH_MS = 1000;
@@ -95,6 +95,20 @@ const holdMessages = [
   "SEI IN ZONA ROSSA!",
   "ANCORA TRE SECONDI!",
   "GAMBE, CUORE, GAS!",
+];
+const dropMessages = [
+  "RILANCIA ORA!",
+  "NON MOLLARE ADESSO!",
+  "TORNA A SPINGERE!",
+  "RIPRENDI IL RITMO!",
+  "ANCORA UNA MARCIA!",
+  "GAMBE ATTIVE!",
+  "RISPONDI COL PEDALE!",
+  "IL TRENO RIPARTE!",
+  "DAI UN COLPO DI GAS!",
+  "QUESTO È IL MOMENTO!",
+  "RIMETTI PRESSIONE!",
+  "NON LASCIARE WATT!",
 ];
 const ghostStorageKey = (challenge: ChallengeId) => `hpv-power-dyno:ghost:${challenge}`;
 function rememberedGhost(challenge: ChallengeId): GhostChoice {
@@ -167,6 +181,7 @@ export function App() {
     best3Ref = useRef(0),
     lastBurstRef = useRef(0),
     lastCoachRef = useRef(0),
+    dropAlertedRef = useRef(false),
     burstId = useRef(0),
     lapsRef = useRef<Lap[]>([]),
     lapStartMs = useRef(0),
@@ -265,6 +280,10 @@ export function App() {
         tone(155, at, .13, .09, "square", 330);
         tone(190, at + .16, .13, .09, "square", 410);
         crackle(at + .06, .08, .035, 1700);
+      } else if (kind === "drop") {
+        // Richiamo breve e ascendente: sprona al rilancio senza sembrare un allarme.
+        tone(260, at, .1, .065, "square", 390);
+        tone(390, at + .13, .13, .075, "square", 600);
       } else {
         // Picco istantaneo: esplosione brillante, più due scintille alte.
         crackle(at, .3, .13, 2100);
@@ -351,6 +370,7 @@ export function App() {
     best3Ref.current = 0;
     lastBurstRef.current = 0;
     lastCoachRef.current = 0;
+    dropAlertedRef.current = false;
     setBurst(undefined);
     lapsRef.current = [];
     lapStartMs.current = 0;
@@ -441,10 +461,27 @@ export function App() {
               hundred: current3 > 750,
             };
           }
+          // Dopo un tratto forte, un calo netto merita un solo invito a
+          // rilanciare. Si riabilita soltanto quando il ciclista recupera:
+          // niente avvisi ripetuti mentre si sta volutamente recuperando.
+          const hasMeaningfulDrop =
+            elapsed >= 6000 &&
+            best3Ref.current >= 300 &&
+            current3 < best3Ref.current * 0.62;
+          if (!feedback && hasMeaningfulDrop && !dropAlertedRef.current) {
+            feedback = {
+              title: dropMessages[burstId.current % dropMessages.length],
+              message: `RILANCIO · ${Math.round(current3)} W ORA`,
+              kind: "drop",
+              hundred: false,
+            };
+          }
+          if (current3 >= best3Ref.current * 0.82) dropAlertedRef.current = false;
         }
         // Un solo cartello alla volta: picco o stimolo, massimo uno ogni 2 s.
         if (feedback && x.timestamp - lastCoachRef.current >= ALERT_COOLDOWN_MS) {
           lastCoachRef.current = x.timestamp;
+          if (feedback.kind === "drop") dropAlertedRef.current = true;
           setBurst({ ...feedback, id: burstId.current++ });
           playCue(feedback.kind);
         }

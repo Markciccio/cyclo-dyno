@@ -834,6 +834,8 @@
 .peak-burst.burst-top5 span { color: #fff7a0; text-shadow: 0 0 8px #fff, 0 0 24px #ffe100, 0 0 58px #ff4a00, 0 0 120px #e40000; }
 .peak-burst.burst-hold span { color: #dffaff; text-shadow: 0 0 8px #fff, 0 0 22px #18d9ff, 0 0 55px #087eb5, 0 0 105px #004d95; }
 .peak-burst.burst-hold small { color: #8decff; text-shadow: 0 0 10px #007ed1; }
+.peak-burst.burst-drop span { color: #ffe783; text-shadow: 0 0 8px #fff4b5, 0 0 22px #ffc400, 0 0 55px #ff6b00; }
+.peak-burst.burst-drop small { color: #ffd68a; text-shadow: 0 0 10px #ff7a00; }
 @keyframes peakBurst {
   0%   { opacity: 0; transform: translate(-50%, -50%) scale(.45) rotate(-6deg); }
   14%  { opacity: 1; transform: translate(-50%, -50%) scale(1.16) rotate(2deg); }
