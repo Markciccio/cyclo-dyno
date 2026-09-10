@@ -62,7 +62,8 @@ type SprintBurst = {
   kind: "peak" | "hold";
   hundred: boolean;
 };
-const POWER_REFRESH_MS = 2000;
+const POWER_REFRESH_MS = 1000;
+const ALERT_COOLDOWN_MS = 2000;
 const holdMessages = [
   "TIENI LA POTENZA!",
   "DAI TUTTO!",
@@ -418,9 +419,8 @@ export function App() {
             };
           }
         }
-        // Un solo cartello alla volta: durante uno sprint i record possono
-        // arrivare a raffica, ma chi pedala deve poter leggere il messaggio.
-        if (feedback && x.timestamp - lastCoachRef.current > 2800) {
+        // Un solo cartello alla volta: picco o stimolo, massimo uno ogni 2 s.
+        if (feedback && x.timestamp - lastCoachRef.current >= ALERT_COOLDOWN_MS) {
           lastCoachRef.current = x.timestamp;
           setBurst({ ...feedback, id: burstId.current++ });
           playCue(feedback.kind);
