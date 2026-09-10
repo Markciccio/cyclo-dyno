@@ -566,6 +566,7 @@ export function App() {
     const peakPower = Math.max(0, ...samples.map((x) => x.powerWatts));
     const sampledSeconds = (samples.at(-1)?.elapsedMs ?? 0) / 1000;
     const averageSpeedKmh = sampledSeconds > 0 ? (metersDone / 1000) / (sampledSeconds / 3600) : 0;
+    const showTrackAverages = challenge === "monza" || challenge === "velodrome";
     const ghostMeters =
       ghost === "none"
         ? undefined
@@ -703,21 +704,21 @@ export function App() {
             {/* Un solo quadro dati: potenza e velocità sono già enormi qui sopra,
                 la pendenza e il residuo stanno sulla mappa. */}
             <Bar
-              n={challenge === "monza" ? "POTENZA MEDIA" : "PICCO POTENZA"}
-              v={`${Math.round(challenge === "monza" ? liveMetrics.averagePower : peakPower)}`}
+              n={showTrackAverages ? "POTENZA MEDIA" : "PICCO POTENZA"}
+              v={`${Math.round(showTrackAverages ? liveMetrics.averagePower : peakPower)}`}
               u="W"
-              fill={(challenge === "monza" ? liveMetrics.averagePower : peakPower) / activeChallenge.powerRangeWatts}
+              fill={(showTrackAverages ? liveMetrics.averagePower : peakPower) / activeChallenge.powerRangeWatts}
               tone="power"
-              emphasis={challenge === "monza"}
+              emphasis={showTrackAverages}
             />
             <Bar n="CADENZA" v={`${live?.cadenceRpm ?? "--"}`} u="rpm" fill={(live?.cadenceRpm ?? 0) / 150} tone="cadence" />
             <Bar
-              n={challenge === "monza" ? "VELOCITÀ MEDIA" : "PICCO VELOCITÀ"}
-              v={(challenge === "monza" ? averageSpeedKmh : speedPeak).toFixed(1)}
+              n={showTrackAverages ? "VELOCITÀ MEDIA" : "PICCO VELOCITÀ"}
+              v={(showTrackAverages ? averageSpeedKmh : speedPeak).toFixed(1)}
               u="km/h"
-              fill={(challenge === "monza" ? averageSpeedKmh : speedPeak) / 100}
+              fill={(showTrackAverages ? averageSpeedKmh : speedPeak) / 100}
               tone="speed"
-              emphasis={challenge === "monza"}
+              emphasis={showTrackAverages}
             />
             <Bar
               n="DISTANZA"
