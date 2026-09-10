@@ -852,7 +852,16 @@ export function App() {
       </main>
     );
   }
-  if (view === "result" && result)
+  if (view === "result" && result) {
+    const isDynoResult = (result.challenge ?? "dyno") === "dyno";
+    // Il risultato corrente non è ancora salvato: lo inseriamo provvisoriamente
+    // nel gruppo giusto per poter mostrare subito posizione e podio.
+    const rankingSource = result.dataSource === "demo"
+      ? sessions.filter((session) => session.dataSource === "demo")
+      : sessions.filter((session) => session.validSession);
+    const dynoRanking = isDynoResult ? rankFor([...rankingSource, result], "dyno") : [];
+    const dynoPlace = dynoRanking.findIndex((session) => session.id === result.id) + 1;
+    const rankingTitle = result.dataSource === "demo" ? "CLASSIFICA DEMO" : "CLASSIFICA UFFICIALE";
     return (
       <main>
         {nav}
@@ -875,10 +884,38 @@ export function App() {
               <label>{result.completed ? "TEMPO SUL PERCORSO" : "PROVA NON COMPLETATA"}</label>
               <strong>{result.completed ? formatLapTime(result.elapsedSeconds ?? 0) : `${(result.distanceKm ?? 0).toFixed(2)} km`}</strong>
             </>
+          ) : isDynoResult ? (
+            <>
+              <section className="dyno-result-score">
+                <div className={`dyno-result-peak ${powerLevel(result.peakPower)}`}>
+                  <label>POTENZA MASSIMA</label>
+                  <strong>{Math.round(result.peakPower)}<em>W</em></strong>
+                  <small>VALORE CLASSIFICA</small>
+                </div>
+                <div className="dyno-result-best5">
+                  <label>POTENZA 5 SECONDI</label>
+                  <strong>{fmt(result.best5s)}</strong>
+                </div>
+              </section>
+              <section className="dyno-result-ranking">
+                <p>{rankingTitle}</p>
+                <strong>SEI {dynoPlace}º IN CLASSIFICA!</strong>
+                <ol>
+                  {dynoRanking.slice(0, 3).map((session, index) => (
+                    <li className={session.id === result.id ? "you" : ""} key={session.id}>
+                      <span>{index + 1}</span>
+                      <b>{session.id === result.id ? "TU" : session.participantName}</b>
+                      <strong>{Math.round(session.peakPower)} W</strong>
+                      {index === 0 && session.id !== result.id && <small>+{Math.max(0, Math.round(session.peakPower - result.peakPower))} W</small>}
+                    </li>
+                  ))}
+                </ol>
+              </section>
+            </>
           ) : (
             <>
-              <label>PICCO POTENZA · VALORE CLASSIFICA</label>
-              <strong>{fmt(result.peakPower)}</strong>
+              <label>BEST 5 SECONDS</label>
+              <strong>{fmt(result.best5s)}</strong>
             </>
           )}
           <div className="result-grid">
@@ -919,6 +956,7 @@ export function App() {
         </section>
       </main>
     );
+  }
   if (view === "leaderboard")
     return (
       <main>
