@@ -890,7 +890,7 @@ export function App() {
                 <div className={`dyno-result-peak ${powerLevel(result.peakPower)}`}>
                   <label>POTENZA MASSIMA</label>
                   <strong>{Math.round(result.peakPower)}<em>W</em></strong>
-                  <small>VALORE CLASSIFICA</small>
+                  <small>SEI {dynoPlace}º IN CLASSIFICA</small>
                 </div>
                 <div className="dyno-result-best5">
                   <label>POTENZA 5 SECONDI</label>
