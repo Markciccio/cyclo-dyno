@@ -751,6 +751,10 @@ export function App() {
             </div>
             <Gauge power={displayPower} range={activeChallenge.powerRangeWatts} />
             <div className="sprint-secondary">
+              <div className="sprint-peak">
+                <label>PICCO</label>
+                <strong className={powerLevel(peakPower)}>{Math.round(peakPower)}<em>W</em></strong>
+              </div>
               <div className="sprint-best">
                 <label>BEST 5 SEC</label>
                 <strong className={powerLevel(liveBest5s ?? 0)}>{liveBest5s === null ? "--" : Math.round(liveBest5s)}<em>W</em></strong>
