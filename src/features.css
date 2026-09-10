@@ -808,15 +808,15 @@
 .peak-burst {
   position: absolute; z-index: 30; left: 50%; top: 38%;
   transform: translate(-50%, -50%); text-align: center; pointer-events: none;
-  animation: peakBurst 2.2s cubic-bezier(.16, .9, .3, 1) forwards;
+  animation: peakBurst 1.8s cubic-bezier(.16, .9, .3, 1) forwards;
   will-change: transform, opacity;
 }
 .peak-burst span {
   display: block; font-family: "Barlow Condensed", Impact, sans-serif; font-weight: 900;
-  font-size: clamp(2.2rem, 9vw, 6.8rem); line-height: .8; letter-spacing: .04em; color: #fff;
+  font-size: clamp(1.45rem, 5.8vw, 4rem); line-height: .85; letter-spacing: .04em; color: #fff;
   text-shadow: 0 0 8px #fff, 0 0 18px #ffdb1a, 0 0 42px #ff7a00, 0 0 88px #e40000;
 }
-.peak-burst small { display: block; margin-top: .45rem; font: 800 clamp(.62rem, 2.8vw, 1.25rem) "DM Mono"; letter-spacing: .17em; color: #fff7b1; text-shadow: 0 0 10px #ff6400; }
+.peak-burst small { display: block; margin-top: .35rem; font: 800 clamp(.55rem, 1.9vw, .9rem) "DM Mono"; letter-spacing: .13em; color: #fff7b1; text-shadow: 0 0 10px #ff6400; }
 .peak-burst.burst-top5 span { color: #fff7a0; text-shadow: 0 0 8px #fff, 0 0 24px #ffe100, 0 0 58px #ff4a00, 0 0 120px #e40000; }
 .peak-burst.burst-hold span { color: #dffaff; text-shadow: 0 0 8px #fff, 0 0 22px #18d9ff, 0 0 55px #087eb5, 0 0 105px #004d95; }
 .peak-burst.burst-hold small { color: #8decff; text-shadow: 0 0 10px #007ed1; }
@@ -827,13 +827,13 @@
   100% { opacity: 0; transform: translate(-50%, -132%) scale(1.5) rotate(0deg); }
 }
 /* Sfondare un centinaio di watt merita un lampo più grosso e un alone. */
-.peak-burst.hundred { animation-duration: 2.5s; }
-.peak-burst.hundred span { font-size: clamp(2.6rem, 11vw, 8rem); color: #fff; }
+.peak-burst.hundred { animation-duration: 2s; }
+.peak-burst.hundred span { font-size: clamp(1.7rem, 6.8vw, 4.7rem); color: #fff; }
 .peak-burst.hundred::before {
   content: ""; position: absolute; left: 50%; top: 50%; width: 130vw; height: 130vw;
   transform: translate(-50%, -50%); border-radius: 50%; z-index: -1;
   background: radial-gradient(closest-side, #ff8a0055, #ff2d0022 45%, transparent 70%);
-  animation: peakShock 2.5s ease-out forwards;
+  animation: peakShock 2s ease-out forwards;
 }
 @keyframes peakShock {
   0% { opacity: .9; transform: translate(-50%, -50%) scale(.12); }

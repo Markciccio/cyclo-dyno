@@ -436,7 +436,9 @@ export function App() {
             };
           }
         }
-        if (feedback) {
+        // Un solo cartello alla volta: durante uno sprint i record possono
+        // arrivare a raffica, ma chi pedala deve poter leggere il messaggio.
+        if (feedback && x.timestamp - lastCoachRef.current > 2800) {
           lastCoachRef.current = x.timestamp;
           setBurst({ ...feedback, id: burstId.current++ });
           playCue(feedback.kind);
