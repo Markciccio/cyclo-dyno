@@ -71,6 +71,14 @@ const holdMessages = [
   "ANCORA TRE SECONDI!",
   "GAMBE, CUORE, GAS!",
 ];
+const ghostStorageKey = (challenge: ChallengeId) => `hpv-power-dyno:ghost:${challenge}`;
+function rememberedGhost(challenge: ChallengeId): GhostChoice {
+  if (challenge === "dyno") return "none";
+  try {
+    const choice = localStorage.getItem(ghostStorageKey(challenge));
+    return choice === "none" || choice === "best" || (typeof choice === "string" && choice in vehicles) ? choice as GhostChoice : "none";
+  } catch { return "none"; }
+}
 /** Media ponderata degli ultimi N secondi: non dipende dalla frequenza del sensore. */
 function trailingPower(samples: SessionSample[], seconds: number) {
   const end = samples.at(-1)?.elapsedMs;
@@ -262,6 +270,11 @@ export function App() {
     }
     ghostRef.current = next;
     setGhost(next);
+    // Ogni circuito ricorda il suo avversario: Monza non deve alterare il
+    // confronto che avevi scelto per il Velodromo o per il Mottarone.
+    if (challenge !== "dyno") {
+      try { localStorage.setItem(ghostStorageKey(challenge), next); } catch { /* memoria non disponibile */ }
+    }
   }
   async function requestWakeLock() {
     const api = (navigator as Navigator & { wakeLock?: { request: (type: "screen") => Promise<ScreenLock> } }).wakeLock;
@@ -301,6 +314,9 @@ export function App() {
     const parsedWeight = Number(riderWeight.replace(",", "."));
     riderNameRef.current = name.trim() || randomName;
     riderWeightRef.current = Number.isFinite(parsedWeight) && parsedWeight >= 35 && parsedWeight <= 180 ? parsedWeight : 70;
+    const savedGhost = rememberedGhost(challenge);
+    ghostRef.current = savedGhost;
+    setGhost(savedGhost);
     setName(riderNameRef.current);
     if (pRef.current instanceof DemoPowerProvider) pRef.current.setScenario(challenge);
     sRef.current = [];
