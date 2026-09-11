@@ -101,7 +101,13 @@ export class DynoAudioEngine {
 
   playCountdownStep(step: number) {
     if (!this.context || !this.enabled) return;
-    this.playTone(step === 3 ? 620 : step === 2 ? 760 : 920, .1, .08, "square");
+    // Classica sequenza di partenza: due bip brevi, poi un lungo "via".
+    // La seconda armonica dà presenza anche sui piccoli altoparlanti del telefono.
+    const isGoSignal = step === 1;
+    const duration = isGoSignal ? .56 : .12;
+    const fundamental = isGoSignal ? 980 : 720;
+    this.playTone(fundamental, duration, isGoSignal ? .15 : .12, "square");
+    this.playTone(fundamental * 1.5, Math.max(.08, duration - .03), isGoSignal ? .045 : .035, "sine");
   }
 
   test() { this.trigger({ kind: "threshold", threshold: 800, priority: 80 }); }

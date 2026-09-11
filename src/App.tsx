@@ -323,7 +323,6 @@ export function App() {
   async function begin() {
     // Tutto l'audio viene sbloccato dal gesto Start: fondamentale su Safari e Android.
     await dynoAudioRef.current.prepare(settings.audio);
-    const hasRaceCountdown = dynoAudioRef.current.playCountdown();
     const randomName = uniqueRiderAlias(sessions);
     const parsedWeight = Number(riderWeight.replace(",", "."));
     riderNameRef.current = name.trim() || randomName;
@@ -363,12 +362,14 @@ export function App() {
     setLapFlash(undefined);
     setCount(3);
     setView("countdown");
-    if (!hasRaceCountdown) dynoAudioRef.current.playCountdownStep(3);
+    dynoAudioRef.current.playCountdownStep(3);
     let n = 3;
     const i = window.setInterval(() => {
       n--;
       setCount(n);
-      if (!hasRaceCountdown || !n) dynoAudioRef.current.playCountdownStep(n || 1);
+      // Segnale di gara: bip, bip, biiiiip. Il "via" coincide con la fine
+      // del terzo segnale, senza un quarto suono ridondante.
+      if (n > 0) dynoAudioRef.current.playCountdownStep(n);
       if (!n) {
         clearInterval(i);
         startSession();
