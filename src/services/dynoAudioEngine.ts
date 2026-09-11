@@ -151,6 +151,10 @@ export class DynoAudioEngine {
       return;
     }
     const threshold = event.threshold ?? 100;
+    if (event.kind === "peak") {
+      if (threshold < 500) this.playArcadeCue(threshold);
+      return;
+    }
     if (threshold < 500) {
       this.playArcadeCue(threshold);
       return;

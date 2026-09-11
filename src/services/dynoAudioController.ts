@@ -1,5 +1,6 @@
 export type DynoAudioEventKind =
   | "threshold"
+  | "peak"
   | "record-proximity"
   | "best5"
   | "record";
@@ -61,6 +62,7 @@ export class DynoAudioController {
   private proximityStage = -1;
   private recordAnnounced = false;
   private best5Announced = false;
+  private lastPeakPower = 0;
 
   reset() {
     this.filteredPower = 0;
@@ -72,6 +74,7 @@ export class DynoAudioController {
     this.proximityStage = -1;
     this.recordAnnounced = false;
     this.best5Announced = false;
+    this.lastPeakPower = 0;
   }
 
   update(input: DynoAudioInput): DynoAudioState {
@@ -106,6 +109,17 @@ export class DynoAudioController {
         threshold: highestThreshold,
         priority: highestThreshold >= 500 ? 200 + config.priority : config.priority,
       });
+    }
+
+    // Ogni nuovo massimo ha un piccolo jingle arcade. Le soglie mantengono
+    // priorità maggiore: se il picco attraversa una fascia si sente un solo
+    // premio, quello corrispondente alla fascia più alta.
+    if (input.peakPower > this.lastPeakPower) {
+      this.lastPeakPower = input.peakPower;
+      if (input.peakPower >= 100) {
+        const tier = Math.min(900, Math.floor(input.peakPower / 100) * 100);
+        candidates.push({ kind: "peak", threshold: tier, priority: 5 });
+      }
     }
 
     const personalPeak = input.personalPeak ?? 0;

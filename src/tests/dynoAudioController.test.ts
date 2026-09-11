@@ -48,4 +48,13 @@ describe("DynoAudioController", () => {
     expect(controller.update({ ...sample(240, 1000, 240, 305), personalBest5s: 300 }).event).toMatchObject({ kind: "best5" });
     expect(controller.update({ ...sample(240, 5000, 240, 310), personalBest5s: 300 }).event).toBeUndefined();
   });
+
+  it("riproduce un jingle per ogni nuovo picco nella stessa fascia", () => {
+    const controller = new DynoAudioController();
+    controller.update(sample(0, 0));
+    // Il primo 240 W è una soglia (200); il secondo massimo non attraversa
+    // soglie e deve quindi diventare un peak-jingle autonomo.
+    controller.update(sample(240, 1000, 240));
+    expect(controller.update(sample(260, 3000, 260)).event).toMatchObject({ kind: "peak", threshold: 200 });
+  });
 });
