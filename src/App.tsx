@@ -69,9 +69,9 @@ const deltaLabel = (seconds: number | undefined) => {
   return `${rounded > 0 ? "+" : ""}${rounded}s`;
 };
 const powerLevel = (w: number) =>
-  w > 600
+  w > 500
     ? "power-extra"
-    : w >= 500
+    : w >= 400
     ? "power-red"
     : w >= 300
       ? "power-orange"
@@ -506,7 +506,7 @@ export function App() {
             elevationMeters: point?.elevation,
           };
         let feedback: Omit<SprintBurst, "id"> | undefined;
-        const powerBand = x.powerWatts > 600 ? "extra" : x.powerWatts >= 500 ? "red" : "normal";
+        const powerBand = x.powerWatts > 500 ? "extra" : x.powerWatts >= 400 ? "red" : "normal";
         if (x.powerWatts > peakRef.current) {
           const hundred = Math.floor(x.powerWatts / 100) > Math.floor(peakRef.current / 100);
           peakRef.current = x.powerWatts;
@@ -519,7 +519,7 @@ export function App() {
               message: hundred ? "POTENZA FUORI SCALA!" : "CONTINUA COSÌ!",
               kind: "peak",
               hundred,
-              extra: x.powerWatts > 600,
+              extra: x.powerWatts > 500,
             };
           }
         }
@@ -527,11 +527,11 @@ export function App() {
         // sprona a tenere lo sforzo, senza aggiungere avvisi Top 5 affollati.
         if (challenge === "dyno") {
           // Anche senza un nuovo record, l'ingresso nelle fasce calde merita
-          // un segnale netto: rosso a 500 W, overdrive oltre 600 W.
+          // un segnale netto: rosso a 400 W, overdrive oltre 500 W.
           if (!feedback && powerBand !== "normal" && powerBand !== powerBandRef.current) {
             feedback = {
               title: powerBand === "extra" ? "OVERDRIVE!" : "ZONA ROSSA!",
-              message: powerBand === "extra" ? "OLTRE 600 W · FUORI SCALA!" : "500 W RAGGIUNTI · SPINGI ANCORA!",
+              message: powerBand === "extra" ? "OLTRE 500 W · OVERDRIVE!" : "400 W RAGGIUNTI · SPINGI ANCORA!",
               kind: "redline",
               hundred: powerBand === "extra",
               extra: powerBand === "extra",
@@ -548,8 +548,8 @@ export function App() {
               title: holdMessages[burstId.current % holdMessages.length],
               message: "TOP 3 SECONDI IN CORSO",
               kind: "hold",
-              hundred: current3 > 600,
-              extra: current3 > 600,
+              hundred: current3 > 500,
+              extra: current3 > 500,
             };
           }
           // Dopo una fase attiva, il calo va intercettato anche nei demo più
@@ -849,7 +849,7 @@ export function App() {
                 {displayPower}<em>W</em>
               </strong>
             </div>
-            <Gauge power={displayPower} range={activeChallenge.powerRangeWatts} />
+            <Gauge power={displayPower} range={activeChallenge.powerRangeWatts} overdriveAt={500} />
             <div className="sprint-secondary">
               <div className="sprint-peak">
                 <label>PICCO</label>
