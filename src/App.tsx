@@ -30,6 +30,8 @@ import booAudioUrl from "./assets/audio/boo.mp3";
 import crowdCheerAudioUrl from "./assets/audio/crowd-cheer.mp3";
 import whistleAudioUrl from "./assets/audio/whistle.mp3";
 import raceCountdownAudioUrl from "./assets/audio/race-countdown.mp3";
+import applauseThunderAudioUrl from "./assets/audio/applause-thunder.mp3";
+import applauseStadiumAudioUrl from "./assets/audio/applause-stadium.mp3";
 const defaults: Settings = {
   eventName: "HPV POWER CHALLENGE",
   defaultDuration: 60,
@@ -52,10 +54,12 @@ type ScreenLock = { release: () => Promise<void>; released: boolean };
 const fmt = (n: number | null, u = "W") =>
   n === null ? "--" : `${Math.round(n)} ${u}`;
 type StoredLapReference = { session: DynoSession; lap: Lap };
-type RecordedEffect = "explosion" | "applause" | "boo" | "crowdCheer" | "whistle";
+type RecordedEffect = "explosion" | "applause" | "applauseThunder" | "applauseStadium" | "boo" | "crowdCheer" | "whistle";
 const recordedEffectUrls: Record<RecordedEffect, string> = {
   explosion: explosionAudioUrl,
   applause: applauseAudioUrl,
+  applauseThunder: applauseThunderAudioUrl,
+  applauseStadium: applauseStadiumAudioUrl,
   boo: booAudioUrl,
   crowdCheer: crowdCheerAudioUrl,
   whistle: whistleAudioUrl,
@@ -231,6 +235,9 @@ export function App() {
     audioContextRef = useRef<AudioContext>(),
     countdownAudioRef = useRef<HTMLAudioElement>(),
     recordedEffectsRef = useRef<Partial<Record<RecordedEffect, AudioBuffer>>>({}),
+    recordedEffectEndsAtRef = useRef(0),
+    lastApplauseRef = useRef(0),
+    lastDropEffectRef = useRef(0),
     recordedEffectLoadsRef = useRef<Partial<Record<RecordedEffect, Promise<void>>>>({}),
     sessionActiveRef = useRef(false);
   pRef.current = provider;
@@ -317,17 +324,33 @@ export function App() {
   }
   function playRecordedEffect(audio: AudioContext, output: AudioNode, effect: RecordedEffect, when: number, volume: number) {
     const buffer = recordedEffectsRef.current[effect];
-    if (!buffer) return false;
+    // Una sola reazione registrata per volta: applauso, botto e boo non si
+    // devono mai trasformare in una confusione sonora quando i watt oscillano.
+    if (!buffer || when < recordedEffectEndsAtRef.current) return false;
     const source = audio.createBufferSource();
     const gain = audio.createGain();
+    const duration = Math.min(2, buffer.duration);
     source.buffer = buffer;
     gain.gain.setValueAtTime(volume, when);
     source.connect(gain).connect(output);
     source.start(when);
     // Le reazioni devono essere un colpo da videogame, non una colonna sonora:
     // anche gli applausi e i boo più lunghi vengono chiusi dopo due secondi.
-    source.stop(when + Math.min(2, buffer.duration));
+    source.stop(when + duration);
+    recordedEffectEndsAtRef.current = when + duration + .04;
     return true;
+  }
+  function nextApplause() {
+    const variants: RecordedEffect[] = ["applause", "applauseThunder", "applauseStadium"];
+    const next = variants[lastApplauseRef.current % variants.length];
+    lastApplauseRef.current++;
+    return next;
+  }
+  function nextDropReaction() {
+    const variants: RecordedEffect[] = ["boo", "whistle"];
+    const next = variants[lastDropEffectRef.current % variants.length];
+    lastDropEffectRef.current++;
+    return next;
   }
   function playRaceCountdown() {
     if (!settings.audio) return false;
@@ -385,11 +408,6 @@ export function App() {
         oscillator.start(when);
         oscillator.stop(when + duration + .02);
       };
-      const applause = (when: number) => {
-        // Una serie irregolare di battiti di mani/crowd, non una voce registrata.
-        [0, .045, .09, .14, .2, .27, .35, .43, .52, .61].forEach((offset, index) =>
-          crackle(when + offset, .05 + (index % 2) * .022, .065 + index * .006, 1150 + index * 110));
-      };
       const thunder = (when: number) => {
         // Basso + rumore lungo: effetto tuono/bomba per l'uscita oltre scala.
         tone(72, when, .9, .32, "sawtooth", 24);
@@ -404,54 +422,34 @@ export function App() {
         const frequency = countStep === 3 ? 620 : countStep === 2 ? 760 : 920;
         tone(frequency, at, .11, .09, "square");
       } else if (kind === "go") {
-        // Partenza da gara: mini-tuono, turbo e scia luminosa.
-        thunder(at);
-        playRecordedEffect(audio, output, "explosion", at + .025, .66);
-        playRecordedEffect(audio, output, "crowdCheer", at + .12, .32);
-        tone(580, at + .08, .42, .14, "square", 2100);
-        crackle(at + .14, .22, .14, 3400);
+        // Via: un unico botto, non un miscuglio di campioni sovrapposti.
+        if (!playRecordedEffect(audio, output, "explosion", at, .72)) thunder(at);
       } else if (kind === "hold") {
-        // Motore in tiro più un piccolo applauso: premia chi tiene il colpo.
-        tone(155, at, .13, .09, "square", 330);
-        tone(190, at + .16, .13, .09, "square", 410);
-        crackle(at + .06, .08, .035, 1700);
-        applause(at + .04);
-        playRecordedEffect(audio, output, "crowdCheer", at + .1, .24);
-      } else if (kind === "drop") {
-        // Trombone triste + boo: il calo netto deve sentirsi, in modo giocoso.
-        tone(210, at, .16, .12, "sawtooth", 156);
-        tone(156, at + .13, .42, .13, "sawtooth", 58);
-        tone(94, at + .21, .32, .095, "triangle", 46);
-        crackle(at + .12, .2, .05, 430);
-        playRecordedEffect(audio, output, "boo", at + .08, .52);
-        playRecordedEffect(audio, output, "whistle", at + .02, .7);
-      } else if (kind === "redline") {
-        if (overdrive) {
-          thunder(at);
-          playRecordedEffect(audio, output, "explosion", at + .02, .95);
-          playRecordedEffect(audio, output, "applause", at + .16, .48);
-          playRecordedEffect(audio, output, "crowdCheer", at + .2, .38);
-        } else {
-          // Sirena breve + scintilla: ingresso nella zona rossa.
-          tone(620, at, .13, .19, "square", 980);
-          tone(980, at + .15, .18, .18, "square", 1460);
-          crackle(at + .05, .2, .14, 2500);
-          playRecordedEffect(audio, output, "crowdCheer", at + .08, .34);
+        // Incitamento se tiene il colpo; al primo avvio senza file pronto,
+        // resta un breve tono sintetico leggibile.
+        if (!playRecordedEffect(audio, output, "crowdCheer", at, .3)) {
+          tone(155, at, .13, .09, "square", 330);
+          tone(190, at + .16, .13, .09, "square", 410);
         }
+      } else if (kind === "drop") {
+        // Alterniamo boo e fischio: una sola reazione alla volta, mai entrambe.
+        if (!playRecordedEffect(audio, output, nextDropReaction(), at, .58)) {
+          tone(210, at, .16, .12, "sawtooth", 156);
+          tone(156, at + .13, .42, .13, "sawtooth", 58);
+        }
+      } else if (kind === "redline") {
+        // Oltre 400 W entra il botto: è il segnale inequivocabile della zona rossa.
+        if (!playRecordedEffect(audio, output, "explosion", at, overdrive ? .98 : .78)) thunder(at);
       } else {
         if (overdrive) {
-          thunder(at);
-          playRecordedEffect(audio, output, "explosion", at + .02, .92);
-          playRecordedEffect(audio, output, "applause", at + .18, .5);
-          playRecordedEffect(audio, output, "crowdCheer", at + .25, .4);
-          applause(at + .22);
+          if (!playRecordedEffect(audio, output, "explosion", at, .98)) thunder(at);
         } else {
-          // Picco istantaneo: esplosione brillante, più due scintille alte.
-          crackle(at, .36, .27, 2100);
-          tone(430, at, .28, .2, "sawtooth", 1220);
-          tone(1240, at + .08, .22, .13, "sine", 2080);
-          playRecordedEffect(audio, output, "applause", at + .1, .32);
-          playRecordedEffect(audio, output, "crowdCheer", at + .14, .22);
+          // Ogni picco ruota tra tre vere ovazioni, così non suona mai uguale.
+          if (!playRecordedEffect(audio, output, nextApplause(), at, .38)) {
+            crackle(at, .36, .27, 2100);
+            tone(430, at, .28, .2, "sawtooth", 1220);
+            tone(1240, at + .08, .22, .13, "sine", 2080);
+          }
         }
       }
     } catch { /* L'audio è un extra: la prova continua anche nei browser che lo bloccano. */ }
@@ -622,7 +620,9 @@ export function App() {
         if (challenge === "dyno") {
           // Anche senza un nuovo record, l'ingresso nelle fasce calde merita
           // un segnale netto: rosso a 400 W, overdrive oltre 500 W.
-          if (!feedback && powerBand !== "normal" && powerBand !== powerBandRef.current) {
+          // L'ingresso oltre 400 W ha priorità perfino sul cartello del nuovo
+          // picco: così il botto di zona rossa arriva sempre al momento giusto.
+          if (powerBand !== "normal" && powerBand !== powerBandRef.current) {
             feedback = {
               title: powerBand === "extra" ? "OVERDRIVE!" : "ZONA ROSSA!",
               message: powerBand === "extra" ? "OLTRE 500 W · OVERDRIVE!" : "400 W RAGGIUNTI · SPINGI ANCORA!",
