@@ -624,7 +624,7 @@ export function App() {
     const sessionLaps = lapsRef.current;
     const fastest = bestLap(sessionLaps);
     const finishTrack = challengeTrack(challenge);
-    setResult({
+    const finishedResult: DynoSession = {
       id: crypto.randomUUID(),
       participantName: riderNameRef.current,
       riderWeightKg: riderWeightRef.current,
@@ -644,7 +644,16 @@ export function App() {
       validSession: valid && source === "assioma",
       quality: source === "demo" ? "DEMO" : valid ? "VALID" : "INVALID",
       ...m,
-    });
+    };
+    setResult(finishedResult);
+    // Lo Sprint è una prova rapida da evento: ogni tentativo entra subito
+    // nell'archivio, poi eventualmente si elimina dalla Classifica.
+    if (challenge === "dyno") {
+      void sessionRepo.save(finishedResult).then(async () => {
+        setSessions(await sessionRepo.getAll());
+        setNotice("RISULTATO SALVATO AUTOMATICAMENTE");
+      });
+    }
     setView("result");
   }
   async function save() {
@@ -1003,11 +1012,17 @@ export function App() {
           {!!result.laps?.length && <LapTable laps={result.laps} />}
           <PowerChart samples={result.samples} />
           <div className="actions">
-            <button className="primary" onClick={save}>
-              SAVE RESULT
-            </button>
-            <button onClick={begin}>RETRY</button>
-            <button onClick={newRider}>NEW RIDER</button>
+            {isDynoResult ? (
+              <button className="primary" onClick={newRider}>TORNA ALLA HOME</button>
+            ) : (
+              <>
+                <button className="primary" onClick={save}>
+                  SAVE RESULT
+                </button>
+                <button onClick={begin}>RETRY</button>
+                <button onClick={newRider}>NEW RIDER</button>
+              </>
+            )}
           </div>
           <p>{notice}</p>
         </section>
