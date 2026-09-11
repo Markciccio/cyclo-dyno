@@ -156,6 +156,7 @@ export function App() {
       location.pathname === "/display" ? "display" : "home",
     ),
     [name, setName] = useState(""),
+    [suggestedAlias, setSuggestedAlias] = useState(() => randomRiderAlias()),
     [settings, setSettings] = useState(defaults),
     [source, setSource] = useState<DataSource>("demo"),
     [provider, setProvider] = useState<PowerDataProvider>(
@@ -382,7 +383,7 @@ export function App() {
     }
   }
   function begin() {
-    const randomName = randomRiderAlias();
+    const randomName = suggestedAlias;
     const parsedWeight = Number(riderWeight.replace(",", "."));
     riderNameRef.current = name.trim() || randomName;
     riderWeightRef.current = Number.isFinite(parsedWeight) && parsedWeight >= 35 && parsedWeight <= 180 ? parsedWeight : 70;
@@ -637,6 +638,7 @@ export function App() {
   }
   function newRider() {
     setName("");
+    setSuggestedAlias(randomRiderAlias());
     setSamples([]);
     setResult(undefined);
     setView("home");
@@ -1193,12 +1195,12 @@ export function App() {
         </p>
         <div className="field-row">
           <label className="field">
-            NOME <small>facoltativo</small>
+            NOME <small className="nickname-suggestion">facoltativo · suggerito: <button type="button" onClick={() => setName(suggestedAlias)}>{suggestedAlias}</button></small>
             <input
               autoFocus
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="Nickname"
+              placeholder={suggestedAlias}
             />
           </label>
           <label className="field">

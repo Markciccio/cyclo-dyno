@@ -1007,6 +1007,11 @@
 .table.with-actions .tr > button:hover { border-color: #ff6a4a; color: #fff; }
 .source-demo { color: #9eb2ff; }.source-real { color: #6ef0a4; }
 
+/* Suggerimento nickname: compatto, ma cliccabile senza occupare una riga. */
+.field .nickname-suggestion { white-space: nowrap; }
+.nickname-suggestion button { padding: 0; border: 0; background: none; color: var(--volt); font: inherit; font-weight: 700; letter-spacing: inherit; text-decoration: underline; }
+.nickname-suggestion button:hover { color: #fff; }
+
 /* Sprint: il wattaggio resta il protagonista assoluto. */
 .sprint-primary .power-readout { font-size: clamp(11.5rem, 52vw, 36rem) !important; }
 @media (max-width: 520px) {
