@@ -968,7 +968,7 @@ export function App() {
                   {dynoRanking.slice(0, 3).map((session, index) => (
                     <li className={session.id === result.id ? "you" : ""} key={session.id}>
                       <span>{index + 1}</span>
-                      <b>{session.id === result.id ? "TU" : session.participantName}</b>
+                      <b>{session.participantName}</b>
                       <strong>{Math.round(session.peakPower)} W</strong>
                       {index === 0 && session.id !== result.id && <small>+{Math.max(0, Math.round(session.peakPower - result.peakPower))} W</small>}
                     </li>
