@@ -262,12 +262,22 @@ export function App() {
       <button className="install" onClick={installApp}>⇩ INSTALLA</button>
     </nav>
   );
-  function playCue(kind: "countdown" | "go" | SprintBurst["kind"], countStep?: number, overdrive = false) {
+  async function prepareAudio() {
     if (!settings.audio) return;
     try {
       const audio = audioContextRef.current ?? new AudioContext();
       audioContextRef.current = audio;
-      void audio.resume();
+      // Deve partire dentro al gesto dell'utente: su Android/iOS un contesto
+      // sospeso ignorava silenziosamente i suoni programmati subito dopo.
+      if (audio.state !== "running") await audio.resume();
+      return audio;
+    } catch { return undefined; }
+  }
+  async function playCue(kind: "countdown" | "go" | SprintBurst["kind"], countStep?: number, overdrive = false) {
+    if (!settings.audio) return;
+    try {
+      const audio = await prepareAudio();
+      if (!audio) return;
       const at = audio.currentTime + .015;
       const crackle = (when: number, duration: number, volume: number, color: number) => {
         const buffer = audio.createBuffer(1, Math.max(1, Math.floor(audio.sampleRate * duration)), audio.sampleRate);
@@ -398,7 +408,9 @@ export function App() {
       setNotice(e instanceof Error ? e.message : "Connessione non riuscita");
     }
   }
-  function begin() {
+  async function begin() {
+    // Primo suono autorizzato direttamente dal click/tocco su Start test.
+    await prepareAudio();
     const randomName = uniqueRiderAlias(sessions);
     const parsedWeight = Number(riderWeight.replace(",", "."));
     riderNameRef.current = name.trim() || randomName;
@@ -431,12 +443,12 @@ export function App() {
     setLapFlash(undefined);
     setCount(3);
     setView("countdown");
-    playCue("countdown", 3);
+    void playCue("countdown", 3);
     let n = 3;
     const i = window.setInterval(() => {
       n--;
       setCount(n);
-      playCue(n ? "countdown" : "go", n);
+      void playCue(n ? "countdown" : "go", n);
       if (!n) {
         clearInterval(i);
         startSession();
@@ -536,7 +548,7 @@ export function App() {
           lastCoachRef.current = x.timestamp;
           if (feedback.kind === "drop") lastDropRef.current = x.timestamp;
           setBurst({ ...feedback, id: burstId.current++ });
-          playCue(feedback.kind, undefined, feedback.extra);
+          void playCue(feedback.kind, undefined, feedback.extra);
         }
         sRef.current.push(y);
         if (track && dt > 0 && isVehicleGhost(ghostRef.current)) {
@@ -1145,6 +1157,7 @@ export function App() {
           >
             SAVE SETTINGS
           </button>
+          <button onClick={() => void playCue("go")}>TEST EFFETTI AUDIO</button>
           <button
             className="danger"
             onClick={async () => {
