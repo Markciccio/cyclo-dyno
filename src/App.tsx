@@ -126,6 +126,17 @@ const riderAliases = [
   "SIGNOR SELLA",
 ];
 const randomRiderAlias = () => riderAliases[Math.floor(Math.random() * riderAliases.length)];
+const numberedRiderAlias = () => `${randomRiderAlias()} #${String(Math.floor(Math.random() * 9000) + 1000)}`;
+/** Gli alias assegnati dall'app restano univoci fra tutti i risultati salvati.
+ * 12 × 9000 combinazioni sono molto oltre un evento da 300–400 partecipanti. */
+const uniqueRiderAlias = (sessions: DynoSession[]) => {
+  const used = new Set(sessions.map((session) => session.participantName.trim().toLocaleUpperCase()));
+  for (let attempt = 0; attempt < 5000; attempt++) {
+    const candidate = numberedRiderAlias();
+    if (!used.has(candidate)) return candidate;
+  }
+  return `RIDER #${Date.now().toString().slice(-8)}`;
+};
 const ghostStorageKey = (challenge: ChallengeId) => `hpv-power-dyno:ghost:${challenge}`;
 function rememberedGhost(challenge: ChallengeId): GhostChoice {
   if (challenge === "dyno") return "none";
@@ -156,7 +167,7 @@ export function App() {
       location.pathname === "/display" ? "display" : "home",
     ),
     [name, setName] = useState(""),
-    [suggestedAlias, setSuggestedAlias] = useState(() => randomRiderAlias()),
+    [suggestedAlias, setSuggestedAlias] = useState(() => numberedRiderAlias()),
     [settings, setSettings] = useState(defaults),
     [source, setSource] = useState<DataSource>("demo"),
     [provider, setProvider] = useState<PowerDataProvider>(
@@ -209,7 +220,14 @@ export function App() {
   pRef.current = provider;
   useEffect(() => {
     sessionRepo.settings(defaults).then(setSettings);
-    sessionRepo.getAll().then(setSessions);
+    sessionRepo.getAll().then((loaded) => {
+      setSessions(loaded);
+      setSuggestedAlias((current) =>
+        loaded.some((session) => session.participantName.trim().toLocaleUpperCase() === current.toLocaleUpperCase())
+          ? uniqueRiderAlias(loaded)
+          : current,
+      );
+    });
   }, []);
   // L'annuncio del giro sparisce da solo: pedalando non si tocca lo schermo.
   useEffect(() => {
@@ -383,7 +401,7 @@ export function App() {
     }
   }
   function begin() {
-    const randomName = suggestedAlias;
+    const randomName = uniqueRiderAlias(sessions);
     const parsedWeight = Number(riderWeight.replace(",", "."));
     riderNameRef.current = name.trim() || randomName;
     riderWeightRef.current = Number.isFinite(parsedWeight) && parsedWeight >= 35 && parsedWeight <= 180 ? parsedWeight : 70;
@@ -638,7 +656,7 @@ export function App() {
   }
   function newRider() {
     setName("");
-    setSuggestedAlias(randomRiderAlias());
+    setSuggestedAlias(uniqueRiderAlias(sessions));
     setSamples([]);
     setResult(undefined);
     setView("home");
