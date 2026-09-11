@@ -1013,9 +1013,11 @@ export function App() {
             challenge={challenge}
             sessions={leaderboardSessions}
             onDelete={async (id) => {
-              if (confirm("Eliminare risultato?")) {
+              const selected = sessions.find((session) => session.id === id);
+              if (confirm(`Eliminare solo il record di ${selected?.participantName ?? "questo atleta"}?`)) {
                 await sessionRepo.delete(id);
                 setSessions(await sessionRepo.getAll());
+                setNotice("RECORD ELIMINATO");
               }
             }}
           />
@@ -1314,7 +1316,16 @@ function Table({
             <span>{timed ? (s.vehicle ? vehicles[s.vehicle].label : "--") : fmt(s.best5s)}</span>
             <span>{fmt(s.averagePower)}</span>
             <span className={s.dataSource === "demo" ? "source-demo" : "source-real"}>{s.dataSource === "demo" ? "DEMO" : "REALE"}</span>
-            {onDelete && <button onClick={() => onDelete(s.id)}>CANCELLA</button>}
+            {onDelete && (
+              <button
+                type="button"
+                title={`Elimina solo il record di ${s.participantName}`}
+                aria-label={`Elimina solo il record di ${s.participantName}`}
+                onClick={() => onDelete(s.id)}
+              >
+                ELIMINA
+              </button>
+            )}
           </div>
         ))
       ) : (
