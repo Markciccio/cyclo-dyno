@@ -25,6 +25,8 @@ import { VehicleIcon } from "./components/VehicleIcon";
 import { challenges, challengeTrack, totalMassKg, vehicles } from "./logic/challenges";
 import { bestOnTrack, ghostLabel, isVehicleGhost, recordMetersAt, recordSecondsAt } from "./logic/ghost";
 import explosionAudioUrl from "./assets/audio/explosion.mp3";
+import explosionDeepAudioUrl from "./assets/audio/explosion-deep.mp3";
+import explosionImpactAudioUrl from "./assets/audio/explosion-impact.mp3";
 import applauseAudioUrl from "./assets/audio/applause.mp3";
 import booAudioUrl from "./assets/audio/boo.mp3";
 import crowdCheerAudioUrl from "./assets/audio/crowd-cheer.mp3";
@@ -54,9 +56,11 @@ type ScreenLock = { release: () => Promise<void>; released: boolean };
 const fmt = (n: number | null, u = "W") =>
   n === null ? "--" : `${Math.round(n)} ${u}`;
 type StoredLapReference = { session: DynoSession; lap: Lap };
-type RecordedEffect = "explosion" | "applause" | "applauseThunder" | "applauseStadium" | "boo" | "crowdCheer" | "whistle";
+type RecordedEffect = "explosion" | "explosionDeep" | "explosionImpact" | "applause" | "applauseThunder" | "applauseStadium" | "boo" | "crowdCheer" | "whistle";
 const recordedEffectUrls: Record<RecordedEffect, string> = {
   explosion: explosionAudioUrl,
+  explosionDeep: explosionDeepAudioUrl,
+  explosionImpact: explosionImpactAudioUrl,
   applause: applauseAudioUrl,
   applauseThunder: applauseThunderAudioUrl,
   applauseStadium: applauseStadiumAudioUrl,
@@ -229,6 +233,9 @@ export function App() {
     lastCoachRef = useRef(0),
     lastDropRef = useRef(0),
     audioMilestonesRef = useRef(new Set<number>()),
+    activeExplosionZoneRef = useRef<number>(),
+    explosionZoneStartedAtRef = useRef(0),
+    lastExplosionCueAtRef = useRef(0),
     powerBandRef = useRef<"normal" | "red" | "extra">("normal"),
     burstId = useRef(0),
     lapsRef = useRef<Lap[]>([]),
@@ -240,6 +247,7 @@ export function App() {
     recordedEffectsRef = useRef<Partial<Record<RecordedEffect, AudioBuffer>>>({}),
     recordedEffectEndsAtRef = useRef(0),
     lastApplauseRef = useRef(0),
+    lastExplosionRef = useRef(0),
     recordedEffectLoadsRef = useRef<Partial<Record<RecordedEffect, Promise<void>>>>({}),
     sessionActiveRef = useRef(false);
   pRef.current = provider;
@@ -324,21 +332,21 @@ export function App() {
         .catch(() => { /* Il mix sintetico rimane il piano B. */ });
     });
   }
-  function playRecordedEffect(audio: AudioContext, output: AudioNode, effect: RecordedEffect, when: number, volume: number) {
+  function playRecordedEffect(audio: AudioContext, output: AudioNode, effect: RecordedEffect, when: number, volume: number, maxDuration = 3) {
     const buffer = recordedEffectsRef.current[effect];
     // Una sola reazione registrata per volta. Se due soglie arrivano vicine,
     // la seconda aspetta la fine della prima invece di sovrapporsi o sparire.
     if (!buffer) return false;
     const source = audio.createBufferSource();
     const gain = audio.createGain();
-    const duration = Math.min(2, buffer.duration);
+    const duration = Math.min(maxDuration, buffer.duration);
     const startAt = Math.max(when, recordedEffectEndsAtRef.current);
     source.buffer = buffer;
     gain.gain.setValueAtTime(volume, startAt);
     source.connect(gain).connect(output);
     source.start(startAt);
-    // Le reazioni devono essere un colpo da videogame, non una colonna sonora:
-    // anche gli applausi e i boo più lunghi vengono chiusi dopo due secondi.
+    // Tre secondi al massimo: abbastanza per un effetto epico, senza rallentare
+    // la lettura dei watt né trasformare la prova in sottofondo continuo.
     source.stop(startAt + duration);
     recordedEffectEndsAtRef.current = startAt + duration + .04;
     return true;
@@ -347,6 +355,12 @@ export function App() {
     const variants: RecordedEffect[] = ["applause", "applauseThunder", "applauseStadium"];
     const next = variants[lastApplauseRef.current % variants.length];
     lastApplauseRef.current++;
+    return next;
+  }
+  function nextExplosion() {
+    const variants: RecordedEffect[] = ["explosion", "explosionDeep", "explosionImpact"];
+    const next = variants[lastExplosionRef.current % variants.length];
+    lastExplosionRef.current++;
     return next;
   }
   function playRaceCountdown() {
@@ -360,7 +374,7 @@ export function App() {
       return true;
     } catch { return false; }
   }
-  async function playCue(kind: AudioCue, countStep?: number) {
+  async function playCue(kind: AudioCue, countStep?: number, heldSeconds = 0) {
     if (!settings.audio) return;
     // Durante il Dyno i feedback testuali restano, ma i suoni sono riservati
     // ai veri traguardi di potenza: niente applausi ripetuti ad ogni picco.
@@ -434,9 +448,11 @@ export function App() {
             tone(threshold === 100 ? 360 : 540, at, .18, volume * .28, "sine", threshold === 100 ? 480 : 760);
           }
         } else {
-          // 300 W: botto breve. 400 W e oltre: super-esplosione crescente.
+          // 300 W: botto breve. Restando nella zona, il colpo si allunga fino
+          // a 3 s; 400 W e oltre diventano progressivamente più imponenti.
           const volume = threshold === 300 ? .48 : threshold === 400 ? .92 : 1;
-          if (!playRecordedEffect(audio, output, "explosion", at, volume)) thunder(at);
+          const duration = Math.min(3, 1.35 + (threshold - 300) * .003 + Math.min(.9, heldSeconds * .15));
+          if (!playRecordedEffect(audio, output, nextExplosion(), at, volume, duration)) thunder(at);
         }
       }
     } catch { /* L'audio è un extra: la prova continua anche nei browser che lo bloccano. */ }
@@ -527,6 +543,10 @@ export function App() {
     lastDropRef.current = 0;
     powerBandRef.current = "normal";
     audioMilestonesRef.current.clear();
+    activeExplosionZoneRef.current = undefined;
+    explosionZoneStartedAtRef.current = 0;
+    lastExplosionCueAtRef.current = 0;
+    lastExplosionRef.current = 0;
     setBurst(undefined);
     lapsRef.current = [];
     lapStartMs.current = 0;
@@ -585,16 +605,40 @@ export function App() {
             gradePercent: point ? point.grade * 100 : undefined,
             elevationMeters: point?.elevation,
           };
-        // Effetti sonori soltanto al primo raggiungimento di ogni soglia.
-        // Se un colpo di pedale salta più livelli insieme, vince il più alto:
-        // si sente la super-esplosione, mai una pila di suoni contemporanei.
+        // 100/200 W sono premi una sola volta. Da 300 W in su entra invece
+        // una "zona esplosiva": il suono torna se il rider la mantiene.
         if (challenge === "dyno") {
           const justReached = POWER_AUDIO_MILESTONES.filter(
             (threshold) => x.powerWatts >= threshold && !audioMilestonesRef.current.has(threshold),
           );
           justReached.forEach((threshold) => audioMilestonesRef.current.add(threshold));
-          const highestThreshold = justReached.at(-1);
-          if (highestThreshold) void playCue("threshold", highestThreshold);
+          const activeExplosionZone = POWER_AUDIO_MILESTONES.filter(
+            (threshold) => threshold >= 300 && x.powerWatts >= threshold,
+          ).at(-1);
+          if (activeExplosionZone) {
+            const enteredZone = activeExplosionZoneRef.current === undefined;
+            const escalatedZone = activeExplosionZone > (activeExplosionZoneRef.current ?? 0);
+            activeExplosionZoneRef.current = activeExplosionZone;
+            if (enteredZone || escalatedZone) {
+              explosionZoneStartedAtRef.current = x.timestamp;
+              lastExplosionCueAtRef.current = x.timestamp;
+              // Se un colpo salta più fasce, la più alta ha la priorità: mai
+              // una sequenza di applausi prima della super-esplosione.
+              void playCue("threshold", activeExplosionZone);
+            } else if (x.timestamp - lastExplosionCueAtRef.current >= 3000) {
+              lastExplosionCueAtRef.current = x.timestamp;
+              void playCue(
+                "threshold",
+                activeExplosionZone,
+                (x.timestamp - explosionZoneStartedAtRef.current) / 1000,
+              );
+            }
+          } else {
+            activeExplosionZoneRef.current = undefined;
+            explosionZoneStartedAtRef.current = 0;
+            const highestApplause = justReached.filter((threshold) => threshold < 300).at(-1);
+            if (highestApplause) void playCue("threshold", highestApplause);
+          }
         }
         let feedback: Omit<SprintBurst, "id"> | undefined;
         const powerBand = x.powerWatts > 500 ? "extra" : x.powerWatts >= 400 ? "red" : "normal";
