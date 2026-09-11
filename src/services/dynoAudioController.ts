@@ -99,7 +99,13 @@ export class DynoAudioController {
     const highestThreshold = crossed.at(-1);
     if (highestThreshold) {
       const config = DYNO_AUDIO_CONFIG.thresholds.find((item) => item.watts === highestThreshold)!;
-      candidates.push({ kind: "threshold", threshold: highestThreshold, priority: config.priority });
+      // In overdrive l'esplosione è il premio principale: non la nascondiamo
+      // dietro a un avviso di record o di media 5 secondi.
+      candidates.push({
+        kind: "threshold",
+        threshold: highestThreshold,
+        priority: highestThreshold >= 500 ? 200 + config.priority : config.priority,
+      });
     }
 
     const personalPeak = input.personalPeak ?? 0;

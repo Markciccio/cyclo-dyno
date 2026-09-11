@@ -28,13 +28,9 @@ export class DynoAudioEngine {
   private controller = new DynoAudioController();
   private context?: AudioContext;
   private master?: GainNode;
-  private rumbleGain?: GainNode;
-  private rumbleFilter?: BiquadFilterNode;
-  private riserGain?: GainNode;
   private buffers = new Map<SampleId, AudioBuffer>();
   private loading?: Promise<void>;
   private activeImpact?: ActiveImpact;
-  private duckUntil = 0;
   private enabled = true;
   private debug = false;
   private countdown?: HTMLAudioElement;
@@ -68,7 +64,7 @@ export class DynoAudioEngine {
     } catch { return false; }
   }
 
-  start() { this.controller.reset(); this.activeImpact = undefined; this.duckUntil = 0; }
+  start() { this.controller.reset(); this.activeImpact = undefined; }
 
   update(input: DynoAudioInput): DynoAudioState {
     const state = this.controller.update(input);
@@ -79,11 +75,8 @@ export class DynoAudioEngine {
   }
 
   stop() {
-    if (!this.context) return;
-    const at = this.context.currentTime;
-    this.rumbleGain?.gain.setTargetAtTime(.0001, at, .16);
-    this.riserGain?.gain.setTargetAtTime(.0001, at, .08);
-    this.fadeImpact(.18);
+    // L'esplosione oltre 500 W non deve sparire entrando nei risultati: la
+    // lasciamo terminare naturalmente, al massimo dopo i suoi 3 secondi.
   }
 
   playCountdown() {
@@ -105,6 +98,7 @@ export class DynoAudioEngine {
 
   dispose() {
     this.stop();
+    this.fadeImpact(.08);
     this.countdown?.pause();
     this.countdown = undefined;
     this.buffers.clear();
@@ -121,53 +115,19 @@ export class DynoAudioEngine {
     master.connect(compressor).connect(context.destination);
     this.master = master;
 
-    const rumbleGain = context.createGain();
-    const rumbleFilter = context.createBiquadFilter();
-    const rumbleA = context.createOscillator();
-    const rumbleB = context.createOscillator();
-    rumbleA.type = "sawtooth";
-    rumbleB.type = "sine";
-    rumbleA.frequency.value = 72;
-    rumbleB.frequency.value = 38;
-    rumbleGain.gain.value = .0001;
-    rumbleFilter.type = "lowpass";
-    rumbleFilter.frequency.value = 420;
-    rumbleA.connect(rumbleFilter);
-    rumbleB.connect(rumbleFilter);
-    rumbleFilter.connect(rumbleGain).connect(master);
-    rumbleA.start();
-    rumbleB.start();
-    this.rumbleGain = rumbleGain;
-    this.rumbleFilter = rumbleFilter;
-
-    const riser = context.createOscillator();
-    const riserGain = context.createGain();
-    riser.type = "triangle";
-    riser.frequency.value = 260;
-    riserGain.gain.value = .0001;
-    riser.connect(riserGain).connect(master);
-    riser.start();
-    this.riserGain = riserGain;
   }
 
   private updateLayers(state: DynoAudioState) {
-    const context = this.context!;
-    const at = context.currentTime;
-    const powerBlend = Math.max(0, Math.min(1, (state.filteredPower - 270) / 620));
-    const duck = at < this.duckUntil ? .68 : 1;
-    this.rumbleGain?.gain.setTargetAtTime(.0001 + Math.pow(powerBlend, 1.6) * .12 * duck, at, .1);
-    this.rumbleFilter?.frequency.setTargetAtTime(380 + powerBlend * 3200, at, .12);
-    const riseBlend = Math.max(0, Math.min(1, (state.riseWattsPerSecond - 35) / 260));
-    const riserAllowed = state.filteredPower > 250 ? riseBlend : 0;
-    this.riserGain?.gain.setTargetAtTime(.0001 + riserAllowed * .055 * duck, at, .07);
-    this.log(`rumble ${Math.round(powerBlend * 100)}% · riser ${Math.round(riserAllowed * 100)}%`);
+    // Niente tappeto sonoro: torna il feeling immediato da gioco arcade.
+    // Conserviamo il valore filtrato nel controller per le soglie, ma ogni
+    // reazione udibile è una breve ricompensa netta e leggibile.
+    void state;
   }
 
   private trigger(event: DynoAudioEvent) {
     const context = this.context;
     if (!context || !this.master) return;
     this.log(`${event.kind}${event.threshold ? ` ${event.threshold}W` : ""}`);
-    this.duckUntil = context.currentTime + (event.priority >= 80 ? .6 : .34);
     if (event.kind === "record-proximity") {
       this.playTone(event.proximity && event.proximity >= .985 ? 1040 : 760, .12, .055, "sine");
       return;
@@ -181,22 +141,22 @@ export class DynoAudioEngine {
       return;
     }
     const threshold = event.threshold ?? 100;
-    if (threshold < 200) this.playSample("applause", .18, .85, event.priority);
-    else if (threshold < 300) this.playSample("applauseStadium", .42, 1.25, event.priority);
-    else if (threshold < 400) this.playSample("explosion", .42, .85, event.priority);
-    else if (threshold < 500) this.playSample("explosionDeep", .7, 1.2, event.priority);
-    else if (threshold < 600) this.playSample("explosionImpact", .88, 1.55, event.priority);
-    else if (threshold < 700) this.playSample("explosionImpact", 1, 1.8, event.priority);
-    else if (threshold < 800) this.playSample("explosionDeep", 1, 2.1, event.priority);
-    else if (threshold < 900) this.playSample("explosionImpact", 1, 2.5, event.priority);
-    else this.playSample("cheer", .68, 2.7, event.priority);
+    if (threshold < 500) {
+      this.playArcadeCue(threshold);
+      return;
+    }
+    // Il premio "grande" parte soltanto in overdrive. Ha la massima priorità
+    // e viene lasciato completo: nessun fade quando la potenza ricade.
+    this.playSample("explosionImpact", 1, 3.024, 1_000, true);
   }
 
-  private playSample(id: SampleId, volume: number, duration: number, priority: number) {
+  private playSample(id: SampleId, volume: number, duration: number, priority: number, complete = false) {
     const context = this.context!;
     const buffer = this.buffers.get(id);
     if (!buffer || !this.master) return;
-    if (this.activeImpact && this.activeImpact.priority > priority) return;
+    // A pari priorità l'effetto già avviato vince: l'esplosione non può essere
+    // tagliata da un secondo attraversamento della fascia overdrive.
+    if (this.activeImpact && this.activeImpact.priority >= priority) return;
     if (this.activeImpact) this.fadeImpact(.08);
     const source = context.createBufferSource();
     const gain = context.createGain();
@@ -207,7 +167,23 @@ export class DynoAudioEngine {
     this.activeImpact = active;
     source.onended = () => { if (this.activeImpact === active) this.activeImpact = undefined; };
     source.start();
-    source.stop(context.currentTime + Math.min(duration, buffer.duration));
+    source.stop(context.currentTime + (complete ? buffer.duration : Math.min(duration, buffer.duration)));
+  }
+
+  private playArcadeCue(threshold: number) {
+    // Arpeggi sintetici originali, volutamente "power-up" e non una copia di
+    // una musica esistente. Brevi, ascendenti e facili da distinguere pedalando.
+    if (this.activeImpact) return;
+    const notes = threshold < 200
+      ? [523, 659]
+      : threshold < 300
+        ? [587, 740, 880]
+        : threshold < 400
+          ? [659, 880, 1047]
+          : [784, 988, 1175, 1568];
+    notes.forEach((note, index) => {
+      window.setTimeout(() => this.playTone(note, .07 + index * .008, .075, "square"), index * 72);
+    });
   }
 
   private fadeImpact(seconds: number) {
