@@ -56,6 +56,12 @@ type ScreenLock = { release: () => Promise<void>; released: boolean };
 const fmt = (n: number | null, u = "W") =>
   n === null ? "--" : `${Math.round(n)} ${u}`;
 type StoredLapReference = { session: DynoSession; lap: Lap };
+type ScheduledExplosion = {
+  source: AudioBufferSourceNode;
+  gain: GainNode;
+  startsAt: number;
+  endsAt: number;
+};
 type RecordedEffect = "explosion" | "explosionDeep" | "explosionImpact" | "applause" | "applauseThunder" | "applauseStadium" | "boo" | "crowdCheer" | "whistle";
 const recordedEffectUrls: Record<RecordedEffect, string> = {
   explosion: explosionAudioUrl,
@@ -246,6 +252,7 @@ export function App() {
     countdownAudioRef = useRef<HTMLAudioElement>(),
     recordedEffectsRef = useRef<Partial<Record<RecordedEffect, AudioBuffer>>>({}),
     recordedEffectEndsAtRef = useRef(0),
+    scheduledExplosionsRef = useRef<ScheduledExplosion[]>([]),
     lastApplauseRef = useRef(0),
     lastExplosionRef = useRef(0),
     recordedEffectLoadsRef = useRef<Partial<Record<RecordedEffect, Promise<void>>>>({}),
@@ -349,7 +356,34 @@ export function App() {
     // la lettura dei watt né trasformare la prova in sottofondo continuo.
     source.stop(startAt + duration);
     recordedEffectEndsAtRef.current = startAt + duration + .04;
+    if (effect.startsWith("explosion")) {
+      const cue: ScheduledExplosion = { source, gain, startsAt: startAt, endsAt: startAt + duration };
+      scheduledExplosionsRef.current = [...scheduledExplosionsRef.current, cue];
+      source.onended = () => {
+        scheduledExplosionsRef.current = scheduledExplosionsRef.current.filter((entry) => entry !== cue);
+      };
+    }
     return true;
+  }
+  function fadeExplosionsOnExit() {
+    const audio = audioContextRef.current;
+    if (!audio) return;
+    const now = audio.currentTime;
+    scheduledExplosionsRef.current.forEach((cue) => {
+      try {
+        if (cue.startsAt > now) {
+          // Era soltanto in coda: fuori zona non deve mai partire.
+          cue.source.stop(now);
+        } else if (cue.endsAt > now) {
+          // È già iniziata: una coda brevissima è più naturale di uno stop secco.
+          cue.gain.gain.cancelScheduledValues(now);
+          cue.gain.gain.setTargetAtTime(.0001, now, .07);
+          cue.source.stop(Math.min(cue.endsAt, now + .28));
+        }
+      } catch { /* Sorgente già chiusa: non è un errore per la prova. */ }
+    });
+    scheduledExplosionsRef.current = [];
+    recordedEffectEndsAtRef.current = now + .3;
   }
   function nextApplause() {
     const variants: RecordedEffect[] = ["applause", "applauseThunder", "applauseStadium"];
@@ -444,14 +478,16 @@ export function App() {
         if (threshold < 300) {
           // 100 W: applauso timido. 200 W: ovazione già più presente.
           const volume = threshold === 100 ? .18 : .52;
-          if (!playRecordedEffect(audio, output, nextApplause(), at, volume)) {
+          const duration = threshold === 100 ? .85 : 1.35;
+          if (!playRecordedEffect(audio, output, nextApplause(), at, volume, duration)) {
             tone(threshold === 100 ? 360 : 540, at, .18, volume * .28, "sine", threshold === 100 ? 480 : 760);
           }
         } else {
           // 300 W: botto breve. Restando nella zona, il colpo si allunga fino
           // a 3 s; 400 W e oltre diventano progressivamente più imponenti.
           const volume = threshold === 300 ? .48 : threshold === 400 ? .92 : 1;
-          const duration = Math.min(3, 1.35 + (threshold - 300) * .003 + Math.min(.9, heldSeconds * .15));
+          const baseDuration = threshold === 300 ? .9 : threshold === 400 ? 1.4 : threshold === 500 ? 1.9 : 2.3;
+          const duration = Math.min(3, baseDuration + Math.min(1.4, heldSeconds * .2));
           if (!playRecordedEffect(audio, output, nextExplosion(), at, volume, duration)) thunder(at);
         }
       }
@@ -634,8 +670,10 @@ export function App() {
               );
             }
           } else {
+            const wasInExplosionZone = activeExplosionZoneRef.current !== undefined;
             activeExplosionZoneRef.current = undefined;
             explosionZoneStartedAtRef.current = 0;
+            if (wasInExplosionZone) fadeExplosionsOnExit();
             const highestApplause = justReached.filter((threshold) => threshold < 300).at(-1);
             if (highestApplause) void playCue("threshold", highestApplause);
           }
