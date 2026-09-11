@@ -111,31 +111,29 @@ const dropMessages = [
   "RIMETTI PRESSIONE!",
   "NON LASCIARE WATT!",
 ];
-const riderAliases = [
-  "CAPITAN CATENA LENTA",
-  "DOTTOR WATT SPRECATO",
-  "TURBO GHIRO ASSONNATO",
-  "MISS SCATTO TARDIVO",
-  "IL PEDALATORE MASCHERATO",
-  "LADY RAPPORTI CORTI",
-  "BARONE DEL WATT IMPROBABILE",
-  "SUPER COPERTONE SGONFIO",
-  "FRECCIA DEL PARCO PUBBLICO",
-  "IL CICLOIDE STORTO",
-  "BICI-BOOM SILENZIOSO",
-  "SIGNOR SELLA SCOMODA",
+const riderTitles = [
+  "CAPITAN CATENA", "DOTTOR WATT", "TURBO GHIRO", "MISS SCATTO", "IL PEDALATORE",
+  "LADY RAPPORTI", "BARONE DEL WATT", "SUPER COPERTONE", "FRECCIA DEL PARCO", "IL CICLOIDE",
+  "BICI BOOM", "SIGNOR SELLA", "RE DEL RULLINO", "DUCA DEL PIGNONE", "NINJA DEL PEDALE",
+  "COMANDANTE GUARNITURA", "PROFESSOR CAVALLETTO", "ZIO SPRINT", "REGINA DELLA SCIA", "MAESTRO DELLA SALITA",
 ];
+const riderDescriptions = [
+  "SCOMODA", "ASSOPITO", "SGONFIO", "TARDIVO", "MASCHERATO", "CORTI", "IMPROBABILE", "RUMOROSO",
+  "STORTO", "SILENZIOSO", "TURBOLENTO", "DISTRATTO", "IN FUGA", "SENZA FRENI", "A MOLLA", "DI CARTONE",
+  "DEL MERCOLEDÌ", "DA BAR", "SENZA BUSSOLA", "CON IL VENTO CONTRO", "A PEDALI LARGHI", "DAI CALZINI SPREZZANTI",
+  "DELLO SPRINTINO", "DEL GIRO LUNGO",
+];
+const riderAliases = riderTitles.flatMap((title) => riderDescriptions.map((description) => `${title} ${description}`));
 const randomRiderAlias = () => riderAliases[Math.floor(Math.random() * riderAliases.length)];
-const numberedRiderAlias = () => `${randomRiderAlias()} #${String(Math.floor(Math.random() * 9000) + 1000)}`;
 /** Gli alias assegnati dall'app restano univoci fra tutti i risultati salvati.
- * 12 × 9000 combinazioni sono molto oltre un evento da 300–400 partecipanti. */
+ * 20 × 24 combinazioni coprono comodamente un evento da 300–400 partecipanti. */
 const uniqueRiderAlias = (sessions: DynoSession[]) => {
   const used = new Set(sessions.map((session) => session.participantName.trim().toLocaleUpperCase()));
-  for (let attempt = 0; attempt < 5000; attempt++) {
-    const candidate = numberedRiderAlias();
+  for (let attempt = 0; attempt < 1000; attempt++) {
+    const candidate = randomRiderAlias();
     if (!used.has(candidate)) return candidate;
   }
-  return `RIDER #${Date.now().toString().slice(-8)}`;
+  return riderAliases.find((candidate) => !used.has(candidate)) ?? "OSPITE DEL VELODROMO";
 };
 const ghostStorageKey = (challenge: ChallengeId) => `hpv-power-dyno:ghost:${challenge}`;
 function rememberedGhost(challenge: ChallengeId): GhostChoice {
@@ -167,7 +165,7 @@ export function App() {
       location.pathname === "/display" ? "display" : "home",
     ),
     [name, setName] = useState(""),
-    [suggestedAlias, setSuggestedAlias] = useState(() => numberedRiderAlias()),
+    [suggestedAlias, setSuggestedAlias] = useState(() => randomRiderAlias()),
     [settings, setSettings] = useState(defaults),
     [source, setSource] = useState<DataSource>("demo"),
     [provider, setProvider] = useState<PowerDataProvider>(
