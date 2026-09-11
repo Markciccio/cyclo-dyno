@@ -84,6 +84,7 @@ type SprintBurst = {
   message: string;
   kind: "peak" | "hold" | "drop";
   hundred: boolean;
+  extra?: boolean;
 };
 const POWER_REFRESH_MS = 1000;
 const ALERT_COOLDOWN_MS = 2000;
@@ -230,7 +231,7 @@ export function App() {
       <button className="install" onClick={installApp}>⇩ INSTALLA</button>
     </nav>
   );
-  function playCue(kind: "countdown" | "go" | SprintBurst["kind"], countStep?: number) {
+  function playCue(kind: "countdown" | "go" | SprintBurst["kind"], countStep?: number, overdrive = false) {
     if (!settings.audio) return;
     try {
       const audio = audioContextRef.current ?? new AudioContext();
@@ -265,6 +266,19 @@ export function App() {
         oscillator.start(when);
         oscillator.stop(when + duration + .02);
       };
+      const applause = (when: number) => {
+        // Una serie irregolare di battiti di mani/crowd, non una voce registrata.
+        [0, .06, .12, .19, .28, .36, .47].forEach((offset, index) =>
+          crackle(when + offset, .045 + (index % 2) * .018, .035 + index * .004, 1250 + index * 90));
+      };
+      const thunder = (when: number) => {
+        // Basso + rumore lungo: effetto tuono/bomba per l'uscita oltre scala.
+        tone(64, when, .72, .19, "sawtooth", 27);
+        tone(38, when + .04, .62, .17, "sine", 22);
+        crackle(when, .82, .2, 210);
+        crackle(when + .08, .33, .11, 950);
+        crackle(when + .26, .18, .075, 2800);
+      };
       if (kind === "countdown") {
         // Semaforo: tre bip netti e crescenti, senza ruggito di motore.
         const frequency = countStep === 3 ? 620 : countStep === 2 ? 760 : 920;
@@ -276,19 +290,26 @@ export function App() {
         tone(520, at + .05, .32, .075, "square", 1700);
         crackle(at + .12, .12, .055, 3100);
       } else if (kind === "hold") {
-        // Motore in tiro, secco e ripetuto: invita a non mollare.
+        // Motore in tiro più un piccolo applauso: premia chi tiene il colpo.
         tone(155, at, .13, .09, "square", 330);
         tone(190, at + .16, .13, .09, "square", 410);
         crackle(at + .06, .08, .035, 1700);
+        applause(at + .04);
       } else if (kind === "drop") {
-        // Richiamo breve e ascendente: sprona al rilancio senza sembrare un allarme.
-        tone(260, at, .1, .065, "square", 390);
-        tone(390, at + .13, .13, .075, "square", 600);
+        // "Boo" sintetico, grave e breve: un richiamo giocoso a rilanciare.
+        tone(168, at, .23, .09, "sawtooth", 102);
+        tone(126, at + .08, .25, .075, "sawtooth", 82);
+        crackle(at + .04, .13, .035, 540);
       } else {
-        // Picco istantaneo: esplosione brillante, più due scintille alte.
-        crackle(at, .3, .13, 2100);
-        tone(430, at, .22, .1, "sawtooth", 1220);
-        tone(1240, at + .08, .17, .065, "sine", 2080);
+        if (overdrive) {
+          thunder(at);
+          applause(at + .22);
+        } else {
+          // Picco istantaneo: esplosione brillante, più due scintille alte.
+          crackle(at, .3, .16, 2100);
+          tone(430, at, .22, .12, "sawtooth", 1220);
+          tone(1240, at + .08, .17, .075, "sine", 2080);
+        }
       }
     } catch { /* L'audio è un extra: la prova continua anche nei browser che lo bloccano. */ }
   }
@@ -442,6 +463,7 @@ export function App() {
               message: hundred ? "POTENZA FUORI SCALA!" : "CONTINUA COSÌ!",
               kind: "peak",
               hundred,
+              extra: x.powerWatts > 600,
             };
           }
         }
@@ -459,6 +481,7 @@ export function App() {
               message: "TOP 3 SECONDI IN CORSO",
               kind: "hold",
               hundred: current3 > 600,
+              extra: current3 > 600,
             };
           }
           // Dopo una fase attiva, il calo va intercettato anche nei demo più
@@ -482,7 +505,7 @@ export function App() {
           lastCoachRef.current = x.timestamp;
           if (feedback.kind === "drop") lastDropRef.current = x.timestamp;
           setBurst({ ...feedback, id: burstId.current++ });
-          playCue(feedback.kind);
+          playCue(feedback.kind, undefined, feedback.extra);
         }
         sRef.current.push(y);
         if (track && dt > 0 && isVehicleGhost(ghostRef.current)) {
