@@ -12,6 +12,7 @@ import type {
 } from "./types";
 import { DemoPowerProvider } from "./services/demoProvider";
 import { AssiomaBluetoothProvider } from "./services/assiomaBluetooth";
+import { DynoAudioEngine } from "./services/dynoAudioEngine";
 import { advanceVirtualSpeed } from "./logic/speed";
 import { cornerLimitKmh, sampleTrack } from "./logic/tracks";
 import { calculateMetrics, formatLapTime, rankFor } from "./logic/metrics";
@@ -24,16 +25,6 @@ import { ElevationProfile } from "./components/ElevationProfile";
 import { VehicleIcon } from "./components/VehicleIcon";
 import { challenges, challengeTrack, totalMassKg, vehicles } from "./logic/challenges";
 import { bestOnTrack, ghostLabel, isVehicleGhost, recordMetersAt, recordSecondsAt } from "./logic/ghost";
-import explosionAudioUrl from "./assets/audio/explosion.mp3";
-import explosionDeepAudioUrl from "./assets/audio/explosion-deep.mp3";
-import explosionImpactAudioUrl from "./assets/audio/explosion-impact.mp3";
-import applauseAudioUrl from "./assets/audio/applause.mp3";
-import booAudioUrl from "./assets/audio/boo.mp3";
-import crowdCheerAudioUrl from "./assets/audio/crowd-cheer.mp3";
-import whistleAudioUrl from "./assets/audio/whistle.mp3";
-import raceCountdownAudioUrl from "./assets/audio/race-countdown.mp3";
-import applauseThunderAudioUrl from "./assets/audio/applause-thunder.mp3";
-import applauseStadiumAudioUrl from "./assets/audio/applause-stadium.mp3";
 const defaults: Settings = {
   eventName: "HPV POWER CHALLENGE",
   defaultDuration: 60,
@@ -56,24 +47,6 @@ type ScreenLock = { release: () => Promise<void>; released: boolean };
 const fmt = (n: number | null, u = "W") =>
   n === null ? "--" : `${Math.round(n)} ${u}`;
 type StoredLapReference = { session: DynoSession; lap: Lap };
-type ScheduledExplosion = {
-  source: AudioBufferSourceNode;
-  gain: GainNode;
-  startsAt: number;
-  endsAt: number;
-};
-type RecordedEffect = "explosion" | "explosionDeep" | "explosionImpact" | "applause" | "applauseThunder" | "applauseStadium" | "boo" | "crowdCheer" | "whistle";
-const recordedEffectUrls: Record<RecordedEffect, string> = {
-  explosion: explosionAudioUrl,
-  explosionDeep: explosionDeepAudioUrl,
-  explosionImpact: explosionImpactAudioUrl,
-  applause: applauseAudioUrl,
-  applauseThunder: applauseThunderAudioUrl,
-  applauseStadium: applauseStadiumAudioUrl,
-  boo: booAudioUrl,
-  crowdCheer: crowdCheerAudioUrl,
-  whistle: whistleAudioUrl,
-};
 
 /** Il primato di pista è costruito soltanto dai giri realmente registrati,
  * mai da una demo: il riferimento resta quindi credibile anche tra sessioni. */
@@ -116,8 +89,6 @@ type SprintBurst = {
 };
 const POWER_REFRESH_MS = 1000;
 const ALERT_COOLDOWN_MS = 2000;
-const POWER_AUDIO_MILESTONES = [100, 200, 300, 400, 500, 600, 700] as const;
-type AudioCue = "countdown" | "go" | "threshold" | SprintBurst["kind"];
 const holdMessages = [
   "TIENI LA POTENZA!",
   "DAI TUTTO!",
@@ -234,28 +205,19 @@ export function App() {
     rivalSpeedRef = useRef(0),
     rivalMetersRef = useRef(0),
     peakRef = useRef(0),
+    personalPeakRef = useRef(0),
+    personalBest5Ref = useRef(0),
     best3Ref = useRef(0),
     lastBurstRef = useRef(0),
     lastCoachRef = useRef(0),
     lastDropRef = useRef(0),
-    audioMilestonesRef = useRef(new Set<number>()),
-    activeExplosionZoneRef = useRef<number>(),
-    explosionZoneStartedAtRef = useRef(0),
-    lastExplosionCueAtRef = useRef(0),
     powerBandRef = useRef<"normal" | "red" | "extra">("normal"),
     burstId = useRef(0),
     lapsRef = useRef<Lap[]>([]),
     lapStartMs = useRef(0),
     lapStartKm = useRef(0),
     wakeLockRef = useRef<ScreenLock>(),
-    audioContextRef = useRef<AudioContext>(),
-    countdownAudioRef = useRef<HTMLAudioElement>(),
-    recordedEffectsRef = useRef<Partial<Record<RecordedEffect, AudioBuffer>>>({}),
-    recordedEffectEndsAtRef = useRef(0),
-    scheduledExplosionsRef = useRef<ScheduledExplosion[]>([]),
-    lastApplauseRef = useRef(0),
-    lastExplosionRef = useRef(0),
-    recordedEffectLoadsRef = useRef<Partial<Record<RecordedEffect, Promise<void>>>>({}),
+    dynoAudioRef = useRef(new DynoAudioEngine()),
     sessionActiveRef = useRef(false);
   pRef.current = provider;
   useEffect(() => {
@@ -287,16 +249,6 @@ export function App() {
     window.addEventListener("appinstalled", installed);
     return () => { window.removeEventListener("beforeinstallprompt", capture); window.removeEventListener("appinstalled", installed); };
   }, []);
-  useEffect(() => {
-    // È pre-caricato mentre l'atleta sceglie la prova: quando preme START il
-    // browser lo può avviare direttamente dal gesto, anche su iPhone/Android.
-    const countdown = new Audio(raceCountdownAudioUrl);
-    countdown.preload = "auto";
-    countdown.volume = .88;
-    countdownAudioRef.current = countdown;
-    countdown.load();
-    return () => { countdown.pause(); countdown.src = ""; };
-  }, []);
   const live = samples.at(-1),
     isA = provider instanceof AssiomaBluetoothProvider,
     activeChallenge = challenges[challenge];
@@ -314,185 +266,6 @@ export function App() {
       <button className="install" onClick={installApp}>⇩ INSTALLA</button>
     </nav>
   );
-  async function prepareAudio() {
-    if (!settings.audio) return;
-    try {
-      const audio = audioContextRef.current ?? new AudioContext();
-      audioContextRef.current = audio;
-      // Deve partire dentro al gesto dell'utente: su Android/iOS un contesto
-      // sospeso ignorava silenziosamente i suoni programmati subito dopo.
-      if (audio.state !== "running") await audio.resume();
-      // I file sono locali e vengono messi in cache anche dalla PWA: li
-      // decodifichiamo dopo il primo tap, per poterli suonare in gara senza
-      // dipendere dalla rete o dalle restrizioni dei tag <audio> su mobile.
-      void preloadRecordedEffects(audio);
-      return audio;
-    } catch { return undefined; }
-  }
-  function preloadRecordedEffects(audio: AudioContext) {
-    (Object.keys(recordedEffectUrls) as RecordedEffect[]).forEach((effect) => {
-      if (recordedEffectsRef.current[effect] || recordedEffectLoadsRef.current[effect]) return;
-      recordedEffectLoadsRef.current[effect] = fetch(recordedEffectUrls[effect])
-        .then((response) => response.arrayBuffer())
-        .then((bytes) => audio.decodeAudioData(bytes))
-        .then((buffer) => { recordedEffectsRef.current[effect] = buffer; })
-        .catch(() => { /* Il mix sintetico rimane il piano B. */ });
-    });
-  }
-  function playRecordedEffect(audio: AudioContext, output: AudioNode, effect: RecordedEffect, when: number, volume: number, maxDuration = 3) {
-    const buffer = recordedEffectsRef.current[effect];
-    // Una sola reazione registrata per volta. Se due soglie arrivano vicine,
-    // la seconda aspetta la fine della prima invece di sovrapporsi o sparire.
-    if (!buffer) return false;
-    const source = audio.createBufferSource();
-    const gain = audio.createGain();
-    const duration = Math.min(maxDuration, buffer.duration);
-    const startAt = Math.max(when, recordedEffectEndsAtRef.current);
-    source.buffer = buffer;
-    gain.gain.setValueAtTime(volume, startAt);
-    source.connect(gain).connect(output);
-    source.start(startAt);
-    // Tre secondi al massimo: abbastanza per un effetto epico, senza rallentare
-    // la lettura dei watt né trasformare la prova in sottofondo continuo.
-    source.stop(startAt + duration);
-    recordedEffectEndsAtRef.current = startAt + duration + .04;
-    if (effect.startsWith("explosion")) {
-      const cue: ScheduledExplosion = { source, gain, startsAt: startAt, endsAt: startAt + duration };
-      scheduledExplosionsRef.current = [...scheduledExplosionsRef.current, cue];
-      source.onended = () => {
-        scheduledExplosionsRef.current = scheduledExplosionsRef.current.filter((entry) => entry !== cue);
-      };
-    }
-    return true;
-  }
-  function fadeExplosionsOnExit() {
-    const audio = audioContextRef.current;
-    if (!audio) return;
-    const now = audio.currentTime;
-    scheduledExplosionsRef.current.forEach((cue) => {
-      try {
-        if (cue.startsAt > now) {
-          // Era soltanto in coda: fuori zona non deve mai partire.
-          cue.source.stop(now);
-        } else if (cue.endsAt > now) {
-          // È già iniziata: una coda brevissima è più naturale di uno stop secco.
-          cue.gain.gain.cancelScheduledValues(now);
-          cue.gain.gain.setTargetAtTime(.0001, now, .07);
-          cue.source.stop(Math.min(cue.endsAt, now + .28));
-        }
-      } catch { /* Sorgente già chiusa: non è un errore per la prova. */ }
-    });
-    scheduledExplosionsRef.current = [];
-    recordedEffectEndsAtRef.current = now + .3;
-  }
-  function nextApplause() {
-    const variants: RecordedEffect[] = ["applause", "applauseThunder", "applauseStadium"];
-    const next = variants[lastApplauseRef.current % variants.length];
-    lastApplauseRef.current++;
-    return next;
-  }
-  function nextExplosion() {
-    const variants: RecordedEffect[] = ["explosion", "explosionDeep", "explosionImpact"];
-    const next = variants[lastExplosionRef.current % variants.length];
-    lastExplosionRef.current++;
-    return next;
-  }
-  function playRaceCountdown() {
-    if (!settings.audio) return false;
-    const countdown = countdownAudioRef.current;
-    if (!countdown || countdown.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) return false;
-    try {
-      countdown.pause();
-      countdown.currentTime = 0;
-      void countdown.play().catch(() => { /* Ripiegamento sui beep WebAudio. */ });
-      return true;
-    } catch { return false; }
-  }
-  async function playCue(kind: AudioCue, countStep?: number, heldSeconds = 0) {
-    if (!settings.audio) return;
-    // Durante il Dyno i feedback testuali restano, ma i suoni sono riservati
-    // ai veri traguardi di potenza: niente applausi ripetuti ad ogni picco.
-    if (kind !== "countdown" && kind !== "go" && kind !== "threshold") return;
-    try {
-      const audio = await prepareAudio();
-      if (!audio) return;
-      const at = audio.currentTime + .015;
-      // Catena "arcade": più presenza e impatto, ma il compressore protegge
-      // cuffie e piccoli speaker da picchi digitali sgradevoli.
-      const output = audio.createGain();
-      const compressor = audio.createDynamicsCompressor();
-      output.gain.setValueAtTime(1.45, at);
-      compressor.threshold.setValueAtTime(-19, at);
-      compressor.knee.setValueAtTime(18, at);
-      compressor.ratio.setValueAtTime(9, at);
-      compressor.attack.setValueAtTime(.004, at);
-      compressor.release.setValueAtTime(.22, at);
-      output.connect(compressor).connect(audio.destination);
-      const crackle = (when: number, duration: number, volume: number, color: number) => {
-        const buffer = audio.createBuffer(1, Math.max(1, Math.floor(audio.sampleRate * duration)), audio.sampleRate);
-        const data = buffer.getChannelData(0);
-        for (let i = 0; i < data.length; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / data.length) ** 2;
-        const noise = audio.createBufferSource();
-        const filter = audio.createBiquadFilter();
-        const gain = audio.createGain();
-        noise.buffer = buffer;
-        filter.type = "bandpass";
-        filter.frequency.setValueAtTime(color, when);
-        gain.gain.setValueAtTime(volume, when);
-        gain.gain.exponentialRampToValueAtTime(.0001, when + duration);
-        noise.connect(filter).connect(gain).connect(output);
-        noise.start(when);
-      };
-      const tone = (frequency: number, when: number, duration: number, volume: number, type: OscillatorType = "sine", endFrequency?: number) => {
-        const oscillator = audio.createOscillator();
-        const gain = audio.createGain();
-        oscillator.type = type;
-        oscillator.frequency.setValueAtTime(frequency, when);
-        if (endFrequency) oscillator.frequency.exponentialRampToValueAtTime(endFrequency, when + duration);
-        gain.gain.setValueAtTime(.0001, when);
-        gain.gain.exponentialRampToValueAtTime(volume, when + .012);
-        gain.gain.exponentialRampToValueAtTime(.0001, when + duration);
-        oscillator.connect(gain).connect(output);
-        oscillator.start(when);
-        oscillator.stop(when + duration + .02);
-      };
-      const thunder = (when: number) => {
-        // Basso + rumore lungo: effetto tuono/bomba per l'uscita oltre scala.
-        tone(72, when, .9, .32, "sawtooth", 24);
-        tone(42, when + .03, .82, .28, "sine", 20);
-        tone(118, when + .07, .4, .16, "square", 38);
-        crackle(when, .96, .38, 180);
-        crackle(when + .06, .46, .22, 820);
-        crackle(when + .19, .3, .16, 2600);
-      };
-      if (kind === "countdown") {
-        // Semaforo: tre bip netti e crescenti, senza ruggito di motore.
-        const frequency = countStep === 3 ? 620 : countStep === 2 ? 760 : 920;
-        tone(frequency, at, .11, .09, "square");
-      } else if (kind === "go") {
-        // Il file countdown ha già il suo "via"; questo è il fallback per
-        // browser che l'hanno bloccato durante il primissimo tap.
-        tone(1420, at, .18, .14, "square", 1850);
-      } else if (kind === "threshold") {
-        const threshold = countStep ?? 100;
-        if (threshold < 300) {
-          // 100 W: applauso timido. 200 W: ovazione già più presente.
-          const volume = threshold === 100 ? .18 : .52;
-          const duration = threshold === 100 ? .85 : 1.35;
-          if (!playRecordedEffect(audio, output, nextApplause(), at, volume, duration)) {
-            tone(threshold === 100 ? 360 : 540, at, .18, volume * .28, "sine", threshold === 100 ? 480 : 760);
-          }
-        } else {
-          // 300 W: botto breve. Restando nella zona, il colpo si allunga fino
-          // a 3 s; 400 W e oltre diventano progressivamente più imponenti.
-          const volume = threshold === 300 ? .48 : threshold === 400 ? .92 : 1;
-          const baseDuration = threshold === 300 ? .9 : threshold === 400 ? 1.4 : threshold === 500 ? 1.9 : 2.3;
-          const duration = Math.min(3, baseDuration + Math.min(1.4, heldSeconds * .2));
-          if (!playRecordedEffect(audio, output, nextExplosion(), at, volume, duration)) thunder(at);
-        }
-      }
-    } catch { /* L'audio è un extra: la prova continua anche nei browser che lo bloccano. */ }
-  }
   function selectVehicle(next: VehicleProfile) {
     vehicleRef.current = next;
     setVehicle(next);
@@ -548,15 +321,19 @@ export function App() {
     }
   }
   async function begin() {
-    // Il nastro di partenza deve partire nel gesto di Start: Safari mobile
-    // blocca gli MP3 avviati anche pochi millisecondi dopo un await.
-    const hasRaceCountdown = playRaceCountdown();
-    // Primo suono autorizzato direttamente dal click/tocco su Start test.
-    await prepareAudio();
+    // Tutto l'audio viene sbloccato dal gesto Start: fondamentale su Safari e Android.
+    await dynoAudioRef.current.prepare(settings.audio);
+    const hasRaceCountdown = dynoAudioRef.current.playCountdown();
     const randomName = uniqueRiderAlias(sessions);
     const parsedWeight = Number(riderWeight.replace(",", "."));
     riderNameRef.current = name.trim() || randomName;
     riderWeightRef.current = Number.isFinite(parsedWeight) && parsedWeight >= 35 && parsedWeight <= 180 ? parsedWeight : 70;
+    const previousDyno = sessions.filter((session) =>
+      (session.challenge ?? "dyno") === "dyno" &&
+      session.participantName.trim().toLocaleUpperCase() === riderNameRef.current.trim().toLocaleUpperCase(),
+    );
+    personalPeakRef.current = Math.max(0, ...previousDyno.map((session) => session.peakPower ?? 0));
+    personalBest5Ref.current = Math.max(0, ...previousDyno.map((session) => session.best5s ?? 0));
     const savedGhost = rememberedGhost(challenge);
     ghostRef.current = savedGhost;
     setGhost(savedGhost);
@@ -578,11 +355,6 @@ export function App() {
     lastCoachRef.current = 0;
     lastDropRef.current = 0;
     powerBandRef.current = "normal";
-    audioMilestonesRef.current.clear();
-    activeExplosionZoneRef.current = undefined;
-    explosionZoneStartedAtRef.current = 0;
-    lastExplosionCueAtRef.current = 0;
-    lastExplosionRef.current = 0;
     setBurst(undefined);
     lapsRef.current = [];
     lapStartMs.current = 0;
@@ -591,12 +363,12 @@ export function App() {
     setLapFlash(undefined);
     setCount(3);
     setView("countdown");
-    if (!hasRaceCountdown) void playCue("countdown", 3);
+    if (!hasRaceCountdown) dynoAudioRef.current.playCountdownStep(3);
     let n = 3;
     const i = window.setInterval(() => {
       n--;
       setCount(n);
-      if (!hasRaceCountdown || !n) void playCue(n ? "countdown" : "go", n);
+      if (!hasRaceCountdown || !n) dynoAudioRef.current.playCountdownStep(n || 1);
       if (!n) {
         clearInterval(i);
         startSession();
@@ -607,6 +379,7 @@ export function App() {
     start.current = performance.now();
     ended.current = false;
     sessionActiveRef.current = true;
+    dynoAudioRef.current.start();
     void requestWakeLock();
     setView("dyno");
     const course = challenges[challenge];
@@ -641,43 +414,6 @@ export function App() {
             gradePercent: point ? point.grade * 100 : undefined,
             elevationMeters: point?.elevation,
           };
-        // 100/200 W sono premi una sola volta. Da 300 W in su entra invece
-        // una "zona esplosiva": il suono torna se il rider la mantiene.
-        if (challenge === "dyno") {
-          const justReached = POWER_AUDIO_MILESTONES.filter(
-            (threshold) => x.powerWatts >= threshold && !audioMilestonesRef.current.has(threshold),
-          );
-          justReached.forEach((threshold) => audioMilestonesRef.current.add(threshold));
-          const activeExplosionZone = POWER_AUDIO_MILESTONES.filter(
-            (threshold) => threshold >= 300 && x.powerWatts >= threshold,
-          ).at(-1);
-          if (activeExplosionZone) {
-            const enteredZone = activeExplosionZoneRef.current === undefined;
-            const escalatedZone = activeExplosionZone > (activeExplosionZoneRef.current ?? 0);
-            activeExplosionZoneRef.current = activeExplosionZone;
-            if (enteredZone || escalatedZone) {
-              explosionZoneStartedAtRef.current = x.timestamp;
-              lastExplosionCueAtRef.current = x.timestamp;
-              // Se un colpo salta più fasce, la più alta ha la priorità: mai
-              // una sequenza di applausi prima della super-esplosione.
-              void playCue("threshold", activeExplosionZone);
-            } else if (x.timestamp - lastExplosionCueAtRef.current >= 3000) {
-              lastExplosionCueAtRef.current = x.timestamp;
-              void playCue(
-                "threshold",
-                activeExplosionZone,
-                (x.timestamp - explosionZoneStartedAtRef.current) / 1000,
-              );
-            }
-          } else {
-            const wasInExplosionZone = activeExplosionZoneRef.current !== undefined;
-            activeExplosionZoneRef.current = undefined;
-            explosionZoneStartedAtRef.current = 0;
-            if (wasInExplosionZone) fadeExplosionsOnExit();
-            const highestApplause = justReached.filter((threshold) => threshold < 300).at(-1);
-            if (highestApplause) void playCue("threshold", highestApplause);
-          }
-        }
         let feedback: Omit<SprintBurst, "id"> | undefined;
         const powerBand = x.powerWatts > 500 ? "extra" : x.powerWatts >= 400 ? "red" : "normal";
         if (x.powerWatts > peakRef.current) {
@@ -748,7 +484,19 @@ export function App() {
           lastCoachRef.current = x.timestamp;
           if (feedback.kind === "drop") lastDropRef.current = x.timestamp;
           setBurst({ ...feedback, id: burstId.current++ });
-          void playCue(feedback.kind);
+        }
+        if (challenge === "dyno") {
+          const nextSamples = [...sRef.current, y];
+          // Il controller sceglie al massimo un evento importante: nessuna
+          // esplosione a intervallo fisso e nessuna sovrapposizione casuale.
+          dynoAudioRef.current.update({
+            powerWatts: x.powerWatts,
+            timestamp: x.timestamp,
+            peakPower: peakRef.current,
+            best5s: trailingPower(nextSamples, 5),
+            personalPeak: personalPeakRef.current,
+            personalBest5s: personalBest5Ref.current,
+          });
         }
         sRef.current.push(y);
         if (track && dt > 0 && isVehicleGhost(ghostRef.current)) {
@@ -802,6 +550,7 @@ export function App() {
       });
     } catch (e) {
       sessionActiveRef.current = false;
+      dynoAudioRef.current.stop();
       void releaseWakeLock();
       setNotice(e instanceof Error ? e.message : "Provider error");
       setView("home");
@@ -825,6 +574,7 @@ export function App() {
     void releaseWakeLock();
     if (timer.current) clearInterval(timer.current);
     pRef.current.stop();
+    dynoAudioRef.current.stop();
     const data = sRef.current,
       m = calculateMetrics(data, settings.thresholds);
     setSamples([...data]);
@@ -1361,7 +1111,9 @@ export function App() {
           >
             SAVE SETTINGS
           </button>
-          <button onClick={() => void playCue("threshold", 400)}>TEST SUPER ESPLOSIONE 400 W</button>
+          <button onClick={() => void dynoAudioRef.current.prepare(settings.audio).then(() => dynoAudioRef.current.test())}>
+            TEST AUDIO OVERDRIVE
+          </button>
           <button
             className="danger"
             onClick={async () => {
