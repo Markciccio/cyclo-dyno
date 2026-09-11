@@ -308,6 +308,9 @@ export function App() {
     gain.gain.setValueAtTime(volume, when);
     source.connect(gain).connect(output);
     source.start(when);
+    // Le reazioni devono essere un colpo da videogame, non una colonna sonora:
+    // anche gli applausi e i boo più lunghi vengono chiusi dopo due secondi.
+    source.stop(when + Math.min(2, buffer.duration));
     return true;
   }
   async function playCue(kind: "countdown" | "go" | SprintBurst["kind"], countStep?: number, overdrive = false) {
