@@ -29,6 +29,7 @@ import applauseAudioUrl from "./assets/audio/applause.mp3";
 import booAudioUrl from "./assets/audio/boo.mp3";
 import crowdCheerAudioUrl from "./assets/audio/crowd-cheer.mp3";
 import whistleAudioUrl from "./assets/audio/whistle.mp3";
+import raceCountdownAudioUrl from "./assets/audio/race-countdown.mp3";
 const defaults: Settings = {
   eventName: "HPV POWER CHALLENGE",
   defaultDuration: 60,
@@ -228,6 +229,7 @@ export function App() {
     lapStartKm = useRef(0),
     wakeLockRef = useRef<ScreenLock>(),
     audioContextRef = useRef<AudioContext>(),
+    countdownAudioRef = useRef<HTMLAudioElement>(),
     recordedEffectsRef = useRef<Partial<Record<RecordedEffect, AudioBuffer>>>({}),
     recordedEffectLoadsRef = useRef<Partial<Record<RecordedEffect, Promise<void>>>>({}),
     sessionActiveRef = useRef(false);
@@ -260,6 +262,16 @@ export function App() {
     window.addEventListener("beforeinstallprompt", capture);
     window.addEventListener("appinstalled", installed);
     return () => { window.removeEventListener("beforeinstallprompt", capture); window.removeEventListener("appinstalled", installed); };
+  }, []);
+  useEffect(() => {
+    // È pre-caricato mentre l'atleta sceglie la prova: quando preme START il
+    // browser lo può avviare direttamente dal gesto, anche su iPhone/Android.
+    const countdown = new Audio(raceCountdownAudioUrl);
+    countdown.preload = "auto";
+    countdown.volume = .88;
+    countdownAudioRef.current = countdown;
+    countdown.load();
+    return () => { countdown.pause(); countdown.src = ""; };
   }, []);
   const live = samples.at(-1),
     isA = provider instanceof AssiomaBluetoothProvider,
@@ -316,6 +328,17 @@ export function App() {
     // anche gli applausi e i boo più lunghi vengono chiusi dopo due secondi.
     source.stop(when + Math.min(2, buffer.duration));
     return true;
+  }
+  function playRaceCountdown() {
+    if (!settings.audio) return false;
+    const countdown = countdownAudioRef.current;
+    if (!countdown || countdown.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) return false;
+    try {
+      countdown.pause();
+      countdown.currentTime = 0;
+      void countdown.play().catch(() => { /* Ripiegamento sui beep WebAudio. */ });
+      return true;
+    } catch { return false; }
   }
   async function playCue(kind: "countdown" | "go" | SprintBurst["kind"], countStep?: number, overdrive = false) {
     if (!settings.audio) return;
@@ -488,6 +511,9 @@ export function App() {
     }
   }
   async function begin() {
+    // Il nastro di partenza deve partire nel gesto di Start: Safari mobile
+    // blocca gli MP3 avviati anche pochi millisecondi dopo un await.
+    const hasRaceCountdown = playRaceCountdown();
     // Primo suono autorizzato direttamente dal click/tocco su Start test.
     await prepareAudio();
     const randomName = uniqueRiderAlias(sessions);
@@ -523,12 +549,12 @@ export function App() {
     setLapFlash(undefined);
     setCount(3);
     setView("countdown");
-    void playCue("countdown", 3);
+    if (!hasRaceCountdown) void playCue("countdown", 3);
     let n = 3;
     const i = window.setInterval(() => {
       n--;
       setCount(n);
-      void playCue(n ? "countdown" : "go", n);
+      if (!hasRaceCountdown || !n) void playCue(n ? "countdown" : "go", n);
       if (!n) {
         clearInterval(i);
         startSession();
