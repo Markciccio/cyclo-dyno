@@ -6,21 +6,23 @@ type DemoProfile = {
   sprint: number;
   variation: number;
   cadenceBias: number;
+  style: "playful" | "diesel" | "ramp" | "waves" | "endurance" | "climber" | "double" | "explosive" | "pro" | "super";
+  attackAt: number;
 };
 
 // Ogni avvio DEMO estrae uno di questi atleti: la prova sembra così una vera
 // persona diversa, non la stessa traccia registrata che si ripete all'infinito.
 export const demoProfiles: readonly DemoProfile[] = [
-  { label: "BAMBINO TURBO", cruise: 115, sprint: 255, variation: 22, cadenceBias: 10 },
-  { label: "VETERANO COSTANTE", cruise: 185, sprint: 360, variation: 26, cadenceBias: -5 },
-  { label: "CICLISTA AMATORIALE", cruise: 225, sprint: 460, variation: 34, cadenceBias: 0 },
-  { label: "DONNA SPORTIVA", cruise: 245, sprint: 520, variation: 36, cadenceBias: 4 },
-  { label: "RANDONNEUR INSTANCABILE", cruise: 265, sprint: 495, variation: 28, cadenceBias: -2 },
-  { label: "SCALATORE LEGGERO", cruise: 280, sprint: 545, variation: 38, cadenceBias: 3 },
-  { label: "ATLETA", cruise: 315, sprint: 650, variation: 48, cadenceBias: 6 },
-  { label: "SPRINTER DA PISTA", cruise: 300, sprint: 790, variation: 58, cadenceBias: 11 },
-  { label: "PROFESSIONISTA", cruise: 345, sprint: 890, variation: 46, cadenceBias: 7 },
-  { label: "SUPERMAN A PEDALI", cruise: 410, sprint: 1_080, variation: 64, cadenceBias: 14 },
+  { label: "BAMBINO TURBO", cruise: 115, sprint: 255, variation: 22, cadenceBias: 10, style: "playful", attackAt: 12 },
+  { label: "VETERANO COSTANTE", cruise: 185, sprint: 360, variation: 26, cadenceBias: -5, style: "diesel", attackAt: 34 },
+  { label: "CICLISTA AMATORIALE", cruise: 225, sprint: 460, variation: 34, cadenceBias: 0, style: "ramp", attackAt: 25 },
+  { label: "DONNA SPORTIVA", cruise: 245, sprint: 520, variation: 36, cadenceBias: 4, style: "waves", attackAt: 18 },
+  { label: "RANDONNEUR INSTANCABILE", cruise: 265, sprint: 495, variation: 28, cadenceBias: -2, style: "endurance", attackAt: 42 },
+  { label: "SCALATORE LEGGERO", cruise: 280, sprint: 545, variation: 38, cadenceBias: 3, style: "climber", attackAt: 28 },
+  { label: "ATLETA", cruise: 315, sprint: 650, variation: 48, cadenceBias: 6, style: "double", attackAt: 17 },
+  { label: "SPRINTER DA PISTA", cruise: 300, sprint: 790, variation: 58, cadenceBias: 11, style: "explosive", attackAt: 11 },
+  { label: "PROFESSIONISTA", cruise: 345, sprint: 890, variation: 46, cadenceBias: 7, style: "pro", attackAt: 31 },
+  { label: "SUPERMAN A PEDALI", cruise: 410, sprint: 1_080, variation: 64, cadenceBias: 14, style: "super", attackAt: 20 },
 ];
 
 export function randomDemoProfile(random = Math.random) {
@@ -59,16 +61,31 @@ export class DemoPowerProvider implements PowerDataProvider {
     if (this.scenario === "dyno") {
       // Riscaldamento, attacco, cedimento e rilanci: l'intensità cambia con
       // il profilo estratto, quindi anche due demo consecutive sono differenti.
-      const base =
-        t < 8 ? profile.cruise * (.27 + t * .032) :
-        t < 15 ? profile.cruise * (.65 + (t - 8) * .045) :
-        t < 21 ? profile.cruise + (t - 15) * (profile.sprint - profile.cruise) / 18 :
-        t < 24.5 ? profile.sprint + Math.sin(t * 5.1) * profile.variation :
-        t < 29 ? profile.cruise * 1.45 - (t - 24.5) * profile.cruise * .09 :
-        t < 34 ? profile.sprint * .78 + (t - 29) * profile.cruise * .08 :
-        t < 40 ? profile.cruise * (1.1 + Math.sin(t * 1.8) * .2) :
-        t < 46 ? profile.sprint * .66 + (t - 40) * profile.cruise * .045 :
-        Math.max(55, profile.cruise * .65 - (t - 46) * profile.cruise * .035);
+      const elapsedFromAttack = t - profile.attackAt;
+      const base = (() => {
+        switch (profile.style) {
+          case "playful":
+            return t < 8 ? 70 + t * 8 : 135 + Math.max(0, Math.sin(t * 1.7)) * 110 + Math.sin(t * 4.5) * 18;
+          case "diesel":
+            return t < 12 ? 110 + t * 6 : t < 35 ? profile.cruise + Math.sin(t * .38) * 14 : 150;
+          case "ramp":
+            return elapsedFromAttack < 0 ? profile.cruise * (.42 + t * .018) : elapsedFromAttack < 7 ? profile.cruise + elapsedFromAttack * 34 : elapsedFromAttack < 11 ? profile.sprint : Math.max(110, profile.sprint - (elapsedFromAttack - 11) * 29);
+          case "waves":
+            return t < 8 ? profile.cruise * .45 : profile.cruise + Math.sin(t * .52) * 105 + Math.max(0, Math.sin(t * 1.05)) * 74;
+          case "endurance":
+            return t < 10 ? profile.cruise * .55 : t < 45 ? profile.cruise * (1 + Math.sin(t * .23) * .08) : profile.cruise * .82;
+          case "climber":
+            return t < 13 ? profile.cruise * .55 : Math.min(profile.sprint, profile.cruise * .82 + (t - 13) * 10);
+          case "double":
+            return t < profile.attackAt ? profile.cruise * .62 : elapsedFromAttack < 4 ? profile.sprint : elapsedFromAttack < 12 ? profile.cruise * .92 : elapsedFromAttack < 17 ? profile.sprint * .9 : profile.cruise * .72;
+          case "explosive":
+            return t < profile.attackAt ? profile.cruise * (.4 + t * .045) : elapsedFromAttack < 2.8 ? profile.sprint : elapsedFromAttack < 10 ? profile.cruise * .72 : profile.cruise * .5;
+          case "pro":
+            return t < 12 ? profile.cruise * .55 : t < profile.attackAt ? profile.cruise * 1.05 : elapsedFromAttack < 6 ? profile.sprint : elapsedFromAttack < 13 ? profile.cruise * 1.2 : profile.cruise * .78;
+          case "super":
+            return t < 10 ? profile.cruise * .5 : profile.cruise + Math.max(0, Math.sin((t - profile.attackAt) * .7)) * (profile.sprint - profile.cruise);
+        }
+      })();
       const pedalStroke = Math.sin(t * 2.7) * Math.max(12, profile.variation * .45);
       return Math.max(0, Math.round(base + noise + pedalStroke));
     }

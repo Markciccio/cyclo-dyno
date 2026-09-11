@@ -5,6 +5,8 @@ describe("profili demo", () => {
   it("offre dieci ciclisti con intensità realmente differenti", () => {
     expect(demoProfiles).toHaveLength(10);
     expect(new Set(demoProfiles.map((profile) => profile.label)).size).toBe(10);
+    expect(new Set(demoProfiles.map((profile) => profile.style)).size).toBe(10);
+    expect(new Set(demoProfiles.map((profile) => profile.attackAt)).size).toBeGreaterThan(7);
     expect(Math.max(...demoProfiles.map((profile) => profile.sprint))).toBeGreaterThan(1_000);
     expect(Math.min(...demoProfiles.map((profile) => profile.sprint))).toBeLessThan(300);
   });
