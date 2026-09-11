@@ -111,6 +111,21 @@ const dropMessages = [
   "RIMETTI PRESSIONE!",
   "NON LASCIARE WATT!",
 ];
+const riderAliases = [
+  "CAPITAN CATENA",
+  "DOTTOR WATT",
+  "TURBO GHIRO",
+  "MISS SCATTO",
+  "IL PEDALATORE",
+  "LADY RAPPORTI",
+  "BARONE DEL WATT",
+  "SUPER COPERTONE",
+  "FRECCIA DEL PARCO",
+  "IL CICLOIDE",
+  "BICI-BOOM",
+  "SIGNOR SELLA",
+];
+const randomRiderAlias = () => riderAliases[Math.floor(Math.random() * riderAliases.length)];
 const ghostStorageKey = (challenge: ChallengeId) => `hpv-power-dyno:ghost:${challenge}`;
 function rememberedGhost(challenge: ChallengeId): GhostChoice {
   if (challenge === "dyno") return "none";
@@ -368,7 +383,7 @@ export function App() {
     }
   }
   function begin() {
-    const randomName = `RIDER-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
+    const randomName = randomRiderAlias();
     const parsedWeight = Number(riderWeight.replace(",", "."));
     riderNameRef.current = name.trim() || randomName;
     riderWeightRef.current = Number.isFinite(parsedWeight) && parsedWeight >= 35 && parsedWeight <= 180 ? parsedWeight : 70;
