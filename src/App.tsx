@@ -24,6 +24,9 @@ import { ElevationProfile } from "./components/ElevationProfile";
 import { VehicleIcon } from "./components/VehicleIcon";
 import { challenges, challengeTrack, totalMassKg, vehicles } from "./logic/challenges";
 import { bestOnTrack, ghostLabel, isVehicleGhost, recordMetersAt, recordSecondsAt } from "./logic/ghost";
+import explosionAudioUrl from "./assets/audio/explosion.mp3";
+import applauseAudioUrl from "./assets/audio/applause.mp3";
+import booAudioUrl from "./assets/audio/boo.mp3";
 const defaults: Settings = {
   eventName: "HPV POWER CHALLENGE",
   defaultDuration: 60,
@@ -46,6 +49,12 @@ type ScreenLock = { release: () => Promise<void>; released: boolean };
 const fmt = (n: number | null, u = "W") =>
   n === null ? "--" : `${Math.round(n)} ${u}`;
 type StoredLapReference = { session: DynoSession; lap: Lap };
+type RecordedEffect = "explosion" | "applause" | "boo";
+const recordedEffectUrls: Record<RecordedEffect, string> = {
+  explosion: explosionAudioUrl,
+  applause: applauseAudioUrl,
+  boo: booAudioUrl,
+};
 
 /** Il primato di pista è costruito soltanto dai giri realmente registrati,
  * mai da una demo: il riferimento resta quindi credibile anche tra sessioni. */
@@ -215,6 +224,8 @@ export function App() {
     lapStartKm = useRef(0),
     wakeLockRef = useRef<ScreenLock>(),
     audioContextRef = useRef<AudioContext>(),
+    recordedEffectsRef = useRef<Partial<Record<RecordedEffect, AudioBuffer>>>({}),
+    recordedEffectLoadsRef = useRef<Partial<Record<RecordedEffect, Promise<void>>>>({}),
     sessionActiveRef = useRef(false);
   pRef.current = provider;
   useEffect(() => {
@@ -271,8 +282,33 @@ export function App() {
       // Deve partire dentro al gesto dell'utente: su Android/iOS un contesto
       // sospeso ignorava silenziosamente i suoni programmati subito dopo.
       if (audio.state !== "running") await audio.resume();
+      // I file sono locali e vengono messi in cache anche dalla PWA: li
+      // decodifichiamo dopo il primo tap, per poterli suonare in gara senza
+      // dipendere dalla rete o dalle restrizioni dei tag <audio> su mobile.
+      void preloadRecordedEffects(audio);
       return audio;
     } catch { return undefined; }
+  }
+  function preloadRecordedEffects(audio: AudioContext) {
+    (Object.keys(recordedEffectUrls) as RecordedEffect[]).forEach((effect) => {
+      if (recordedEffectsRef.current[effect] || recordedEffectLoadsRef.current[effect]) return;
+      recordedEffectLoadsRef.current[effect] = fetch(recordedEffectUrls[effect])
+        .then((response) => response.arrayBuffer())
+        .then((bytes) => audio.decodeAudioData(bytes))
+        .then((buffer) => { recordedEffectsRef.current[effect] = buffer; })
+        .catch(() => { /* Il mix sintetico rimane il piano B. */ });
+    });
+  }
+  function playRecordedEffect(audio: AudioContext, output: AudioNode, effect: RecordedEffect, when: number, volume: number) {
+    const buffer = recordedEffectsRef.current[effect];
+    if (!buffer) return false;
+    const source = audio.createBufferSource();
+    const gain = audio.createGain();
+    source.buffer = buffer;
+    gain.gain.setValueAtTime(volume, when);
+    source.connect(gain).connect(output);
+    source.start(when);
+    return true;
   }
   async function playCue(kind: "countdown" | "go" | SprintBurst["kind"], countStep?: number, overdrive = false) {
     if (!settings.audio) return;
@@ -340,6 +376,7 @@ export function App() {
       } else if (kind === "go") {
         // Partenza da gara: mini-tuono, turbo e scia luminosa.
         thunder(at);
+        playRecordedEffect(audio, output, "explosion", at + .025, .66);
         tone(580, at + .08, .42, .14, "square", 2100);
         crackle(at + .14, .22, .14, 3400);
       } else if (kind === "hold") {
@@ -354,9 +391,12 @@ export function App() {
         tone(156, at + .13, .42, .13, "sawtooth", 58);
         tone(94, at + .21, .32, .095, "triangle", 46);
         crackle(at + .12, .2, .05, 430);
+        playRecordedEffect(audio, output, "boo", at + .08, .52);
       } else if (kind === "redline") {
         if (overdrive) {
           thunder(at);
+          playRecordedEffect(audio, output, "explosion", at + .02, .95);
+          playRecordedEffect(audio, output, "applause", at + .16, .48);
         } else {
           // Sirena breve + scintilla: ingresso nella zona rossa.
           tone(620, at, .13, .19, "square", 980);
@@ -366,12 +406,15 @@ export function App() {
       } else {
         if (overdrive) {
           thunder(at);
+          playRecordedEffect(audio, output, "explosion", at + .02, .92);
+          playRecordedEffect(audio, output, "applause", at + .18, .5);
           applause(at + .22);
         } else {
           // Picco istantaneo: esplosione brillante, più due scintille alte.
           crackle(at, .36, .27, 2100);
           tone(430, at, .28, .2, "sawtooth", 1220);
           tone(1240, at + .08, .22, .13, "sine", 2080);
+          playRecordedEffect(audio, output, "applause", at + .1, .32);
         }
       }
     } catch { /* L'audio è un extra: la prova continua anche nei browser che lo bloccano. */ }
