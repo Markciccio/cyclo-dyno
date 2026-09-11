@@ -230,8 +230,7 @@ export function App() {
   }, []);
   const live = samples.at(-1),
     isA = provider instanceof AssiomaBluetoothProvider,
-    activeChallenge = challenges[challenge],
-    activeVehicle = vehicles[vehicle];
+    activeChallenge = challenges[challenge];
   const speedPeak = Math.max(0, ...samples.map((x) => x.virtualSpeedKmh));
   // bestWindow scandisce i campioni per ogni campione: va calcolato una volta sola.
   const liveMetrics = useMemo(() => calculateMetrics(samples, settings.thresholds), [samples, settings.thresholds]);
@@ -708,7 +707,7 @@ export function App() {
       <main className="dyno">
         <header>
           <span className="live">
-            ● {source.toUpperCase()} · {activeVehicle.label}
+            ● {riderNameRef.current} · {source.toUpperCase()}
             {/* Schermo tenuto acceso: un glifo, che la scritta faceva andare a capo l'intestazione. */}
             {wakeActive && <b title="Schermo tenuto acceso"> ▣</b>}
           </span>
