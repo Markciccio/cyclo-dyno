@@ -82,7 +82,7 @@ type SprintBurst = {
   id: number;
   title: string;
   message: string;
-  kind: "peak" | "hold" | "drop";
+  kind: "peak" | "hold" | "drop" | "redline";
   hundred: boolean;
   extra?: boolean;
 };
@@ -208,6 +208,7 @@ export function App() {
     lastBurstRef = useRef(0),
     lastCoachRef = useRef(0),
     lastDropRef = useRef(0),
+    powerBandRef = useRef<"normal" | "red" | "extra">("normal"),
     burstId = useRef(0),
     lapsRef = useRef<Lap[]>([]),
     lapStartMs = useRef(0),
@@ -341,6 +342,15 @@ export function App() {
         tone(168, at, .23, .09, "sawtooth", 102);
         tone(126, at + .08, .25, .075, "sawtooth", 82);
         crackle(at + .04, .13, .035, 540);
+      } else if (kind === "redline") {
+        if (overdrive) {
+          thunder(at);
+        } else {
+          // Sirena breve + scintilla: ingresso nella zona rossa.
+          tone(620, at, .13, .11, "square", 980);
+          tone(980, at + .15, .16, .1, "square", 1460);
+          crackle(at + .05, .16, .065, 2500);
+        }
       } else {
         if (overdrive) {
           thunder(at);
@@ -435,6 +445,7 @@ export function App() {
     lastBurstRef.current = 0;
     lastCoachRef.current = 0;
     lastDropRef.current = 0;
+    powerBandRef.current = "normal";
     setBurst(undefined);
     lapsRef.current = [];
     lapStartMs.current = 0;
@@ -494,6 +505,7 @@ export function App() {
             elevationMeters: point?.elevation,
           };
         let feedback: Omit<SprintBurst, "id"> | undefined;
+        const powerBand = x.powerWatts > 600 ? "extra" : x.powerWatts >= 500 ? "red" : "normal";
         if (x.powerWatts > peakRef.current) {
           const hundred = Math.floor(x.powerWatts / 100) > Math.floor(peakRef.current / 100);
           peakRef.current = x.powerWatts;
@@ -513,6 +525,18 @@ export function App() {
         // Nello Sprint l'incoraggiamento guarda una finestra reale di 3 s:
         // sprona a tenere lo sforzo, senza aggiungere avvisi Top 5 affollati.
         if (challenge === "dyno") {
+          // Anche senza un nuovo record, l'ingresso nelle fasce calde merita
+          // un segnale netto: rosso a 500 W, overdrive oltre 600 W.
+          if (!feedback && powerBand !== "normal" && powerBand !== powerBandRef.current) {
+            feedback = {
+              title: powerBand === "extra" ? "OVERDRIVE!" : "ZONA ROSSA!",
+              message: powerBand === "extra" ? "OLTRE 600 W · FUORI SCALA!" : "500 W RAGGIUNTI · SPINGI ANCORA!",
+              kind: "redline",
+              hundred: powerBand === "extra",
+              extra: powerBand === "extra",
+            };
+          }
+          powerBandRef.current = powerBand;
           const nextSamples = [...sRef.current, y];
           const current3 = trailingPower(nextSamples, 3);
           const hasThreeSeconds = elapsed >= 3000;
