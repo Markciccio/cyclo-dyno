@@ -1092,3 +1092,142 @@
 /* Il semaforo non deve seguire il layout della pagina: occupa sempre il display. */
 main.countdown{position:fixed;inset:0;z-index:1000;width:100vw;max-width:none;min-height:100dvh;margin:0;padding:0;display:grid;place-items:center;background:radial-gradient(circle at center,#efff61 0 13%,#d8ff22 42%,#a5c700 100%);}
 main.countdown>div{margin:0;line-height:.72;text-align:center;transform:translateY(-1vh);}
+
+/* =========================================================================
+   TABLET E SCHERMO INTERO
+   Fino a qui c'era un solo scalino a 520 px: ogni iPad (744, 820, 1180)
+   finiva nel ramo "desktop" e la schermata di corsa usciva dal video.
+   ========================================================================= */
+
+/* In standalone su iOS la pagina arriva sotto la status bar e sotto la barra
+   home: le insets ridanno lo spazio senza rubarlo a chi non ne ha. */
+body { min-height: 100svh; }
+main {
+  min-height: 100svh;
+  padding-left: max(1rem, env(safe-area-inset-left));
+  padding-right: max(1rem, env(safe-area-inset-right));
+  padding-top: max(1rem, env(safe-area-inset-top));
+  padding-bottom: max(1rem, env(safe-area-inset-bottom));
+}
+
+/* La colonna dati: in verticale è una pila, in orizzontale diventa la metà
+   destra del cruscotto. Fa da contenitore, così i numeri si dimensionano
+   sulla larghezza che hanno davvero e non su quella dello schermo. */
+.run-data {
+  display: flex;
+  flex-direction: column;
+  gap: .4rem;
+  min-width: 0;
+  min-height: 0;
+  flex: 1 1 auto;
+  container-type: inline-size;
+}
+
+/*
+ * I numeroni erano in vw: su un iPad da 820 px "39vw" vale 320 px di altezza
+ * e da solo mangiava mezzo schermo. Ora il limite è il minore fra la larghezza
+ * del contenitore e l'altezza disponibile, così la misura regge su ogni
+ * formato senza uno scalino per ogni modello.
+ */
+.dyno .hero .power-readout,
+.dyno .hero .speed-readout {
+  font-size: min(17cqw, 12svh);
+  transform: none;
+}
+.dyno .hero { margin: 0 auto; max-width: none; }
+
+@media (min-width: 521px) {
+  .dyno { display: flex; flex-direction: column; gap: .45rem; height: 100svh; max-width: none; }
+  .dyno .hero { flex: 0 0 auto; }
+  .dyno .chart { flex: 1 1 60px; min-height: 60px; margin: 0; }
+  .dyno .danger { flex: 0 0 auto; margin-top: 0; }
+  .satellite-track { flex: 1 1 auto; height: auto; min-height: 180px; }
+}
+
+/* ---------- iPad in orizzontale: cruscotto a due colonne ---------- */
+@media (orientation: landscape) and (min-width: 860px) {
+  .dyno {
+    display: grid;
+    grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    grid-template-areas:
+      "head head"
+      "map  data"
+      "stop stop";
+    column-gap: .7rem;
+    row-gap: .45rem;
+    height: 100svh;
+  }
+  .dyno > header { grid-area: head; }
+  .dyno > .satellite-track { grid-area: map; height: auto; min-height: 0; }
+  .dyno > .run-data { grid-area: data; }
+  .dyno > .danger { grid-area: stop; }
+  /* In colonna stretta il quadro dati sta su due file invece che su sei. */
+  .run-strip { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .dyno .chart { flex: 1 1 70px; }
+}
+
+/* ---------- iPad in verticale: la pila regge, serve solo respiro ---------- */
+@media (orientation: portrait) and (min-width: 640px) {
+  .satellite-track { flex: 1 1 auto; min-height: 300px; }
+  .run-strip { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .run-cell b { font-size: min(7cqw, 2.6rem); }
+  .dyno .chart { flex: 0 1 110px; }
+}
+
+/* In un flex a colonna "margin: X auto" fa collassare l'elemento sulla larghezza
+   del contenuto: barre, profilo e quadro dati vanno tenuti larghi a mano. */
+.dyno .gauge,
+.dyno .speed-scale,
+.dyno .elevation-profile,
+.dyno .run-strip,
+.dyno .chart {
+  width: 100%;
+  max-width: none;
+  margin-inline: 0;
+}
+.dyno .gauge, .dyno .speed-scale { margin-block: .3rem; }
+.dyno .elevation-profile { margin-block: 0; flex: 0 0 auto; }
+
+/* Il badge del picco copriva la velocità: sta dentro la barra a ogni misura. */
+.speed-extra i {
+  position: absolute; right: .3rem; top: 50%; left: auto;
+  transform: translateY(-50%); padding: .05rem .3rem;
+  font-size: .6rem; line-height: 1.3; animation: none;
+}
+
+@media (min-width: 521px) {
+  /* Lo spazio in avanzo va ai numeri grandi, non al grafico. */
+  .dyno .hero { flex: 1 1 auto; align-content: center; }
+  .dyno .chart { flex: 0 1 92px; min-height: 60px; }
+}
+
+@media (orientation: landscape) and (min-width: 860px) {
+  .dyno .hero .power-readout,
+  .dyno .hero .speed-readout { font-size: min(22cqw, 15svh); }
+  .dyno .chart { flex: 0 1 80px; }
+  /* Il quadrante dietro la velocità va rimpicciolito con la colonna. */
+  .speed-dial { width: min(70cqw, 240px); height: min(34cqw, 116px); }
+  .speed-dial span { height: min(34cqw, 114px); }
+}
+
+/* Anche l'hero era vittima del collasso da margini automatici: era largo 272 px
+   su 788 disponibili, e i numeri finivano tagliati nella loro stessa colonna. */
+.dyno .hero { width: 100%; margin-inline: 0; }
+
+/* ---------- iPad in verticale: lo spazio in avanzo va alla mappa ---------- */
+@media (orientation: portrait) and (min-width: 640px) {
+  /* Unico elemento elastico: così il vuoto non si apre attorno ai numeri e la
+     colonna dei mezzi resta dentro la mappa invece di uscirne. */
+  .satellite-track { flex: 1 1 auto; min-height: 44svh; }
+  .dyno .hero { flex: 0 0 auto; }
+  .dyno .chart { flex: 0 0 96px; }
+  .dyno .hero .power-readout,
+  .dyno .hero .speed-readout { font-size: min(19cqw, 11svh); }
+}
+
+/* L'unità si sovrapponeva all'ultima cifra ora che il numero non è più scalato. */
+.dyno .hero .power-readout em, .dyno .hero .speed-readout em { margin-left: .14em; letter-spacing: 0; }
+/* Il picco di velocità è già nel quadro dati: il badge sulla barra lo ripeteva
+   e a colonna stretta finiva sopra il numero. */
+.speed-extra i { display: none; }

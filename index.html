@@ -1,15 +1,30 @@
 <!doctype html>
-<html lang="en">
+<html lang="it">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>dyno-a-pedali</title>
+    <!-- viewport-fit=cover: la pagina arriva sotto la status bar, le insets la ripagano nel CSS. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>HPV Power Dyno</title>
+
+    <!--
+      iOS e iPadOS ignorano "display: standalone" del manifest: senza questi meta
+      la scorciatoia in Home riapre Safari con tutta la barra degli indirizzi.
+      Dopo averli aggiunti va rimossa e ricreata l'icona in Home, perché iOS
+      tiene in cache i metadati della vecchia scorciatoia.
+    -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Power Dyno" />
+    <meta name="theme-color" content="#090b0f" />
+
     <link rel="apple-touch-icon" href="./icon-192.png" />
+    <link rel="apple-touch-icon" sizes="192x192" href="./icon-192.png" />
+    <link rel="apple-touch-icon" sizes="512x512" href="./icon-512.png" />
   </head>
   <body>
     <div id="app"></div>
-    <meta name="theme-color" content="#090b0f" />
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

@@ -728,20 +728,6 @@ export function App() {
           onGhostChange={selectGhost}
           running
         />
-        {challenge === "velodrome" && (
-          <section className="velodrome-deltas" aria-live="polite">
-            <div className={`velodrome-delta ${sessionLapDelta !== undefined && sessionLapDelta <= 0 ? "ahead" : "behind"}`}>
-              <label>Δ BEST SESSIONE</label>
-              <strong>{deltaLabel(sessionLapDelta)}</strong>
-              <small>{sessionBestLap ? `riferimento ${formatLapTime(sessionBestLap.seconds)}` : "chiudi il primo giro"}</small>
-            </div>
-            <div className={`velodrome-delta ${absoluteLapDelta !== undefined && absoluteLapDelta <= 0 ? "ahead" : "behind"}`}>
-              <label>Δ RECORD ASSOLUTO</label>
-              <strong>{deltaLabel(absoluteLapDelta)}</strong>
-              <small>{absoluteVelodromeLap ? `${absoluteVelodromeLap.session.participantName} · ${formatLapTime(absoluteVelodromeLap.lap.seconds)}` : "nessun record reale"}</small>
-            </div>
-          </section>
-        )}
         {lapFlash && challenge !== "velodrome" && (
           <section key={lapFlash.lap.index} className={`lap-flash ${lapFlash.rank === 1 ? "best" : ""}`}>
             <header>
@@ -802,6 +788,21 @@ export function App() {
           </section>
         )}
         {!isSprint && (
+          <div className="run-data">
+        {challenge === "velodrome" && (
+          <section className="velodrome-deltas" aria-live="polite">
+            <div className={`velodrome-delta ${sessionLapDelta !== undefined && sessionLapDelta <= 0 ? "ahead" : "behind"}`}>
+              <label>Δ BEST SESSIONE</label>
+              <strong>{deltaLabel(sessionLapDelta)}</strong>
+              <small>{sessionBestLap ? `riferimento ${formatLapTime(sessionBestLap.seconds)}` : "chiudi il primo giro"}</small>
+            </div>
+            <div className={`velodrome-delta ${absoluteLapDelta !== undefined && absoluteLapDelta <= 0 ? "ahead" : "behind"}`}>
+              <label>Δ RECORD ASSOLUTO</label>
+              <strong>{deltaLabel(absoluteLapDelta)}</strong>
+              <small>{absoluteVelodromeLap ? `${absoluteVelodromeLap.session.participantName} · ${formatLapTime(absoluteVelodromeLap.lap.seconds)}` : "nessun record reale"}</small>
+            </div>
+          </section>
+        )}
         <section className="hero">
           <div className="hero-reading power-reading">
             <label>POTENZA</label>
@@ -819,7 +820,6 @@ export function App() {
             <div className={`speed-scale ${newSpeedPeak ? "speed-extra" : ""}`}><div style={{width:`${Math.min(100,displaySpeed)}%`}}/>{newSpeedPeak&&<i>NUOVO PICCO · {speedPeak.toFixed(1)} km/h</i>}<span>0</span><b>100 km/h</b></div>
           </div>
         </section>
-        )}
         {liveTrack && (
           <section className="run-strip">
             {/* Un solo quadro dati: potenza e velocità sono già enormi qui sopra,
@@ -872,7 +872,9 @@ export function App() {
             windowMeters={liveTrack.totalClimb > 150 ? 1000 : undefined}
           />
         )}
-        {!isSprint && <PowerChart samples={samples} />}
+            <PowerChart samples={samples} />
+          </div>
+        )}
         <button className="danger" onClick={() => finish(activeChallenge.lap && laps.length > 0)}>
           {activeChallenge.lap && laps.length > 0 ? "TERMINA SESSIONE" : "STOP / INVALIDA"}
         </button>
