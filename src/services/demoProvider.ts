@@ -41,7 +41,16 @@ export class DemoPowerProvider implements PowerDataProvider {
   status() { return this.profile ? `DEMO · ${this.profile.label}` : "DEMO · PROFILO CASUALE"; }
 
   private chooseProfile() {
-    this.profile = randomDemoProfile();
+    const drawn = randomDemoProfile();
+    // La casualità non deve sembrare un bug: due prove consecutive non usano
+    // mai lo stesso atleta, pur lasciando casuale l'ordine del resto della rosa.
+    if (drawn !== this.profile) {
+      this.profile = drawn;
+      return;
+    }
+    const currentIndex = demoProfiles.indexOf(drawn);
+    const offset = 1 + Math.floor(Math.random() * (demoProfiles.length - 1));
+    this.profile = demoProfiles[(currentIndex + offset) % demoProfiles.length]!;
   }
 
   private watts(t: number) {

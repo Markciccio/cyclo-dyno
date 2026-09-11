@@ -696,7 +696,7 @@ export function App() {
       <main className="dyno">
         <header>
           <span className="live">
-            ● {riderNameRef.current} · {source.toUpperCase()}
+            ● {riderNameRef.current} · {provider.status().toUpperCase()}
             {/* Schermo tenuto acceso: un glifo, che la scritta faceva andare a capo l'intestazione. */}
             {wakeActive && <b title="Schermo tenuto acceso"> ▣</b>}
           </span>
