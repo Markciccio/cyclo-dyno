@@ -106,6 +106,8 @@ type SprintBurst = {
 };
 const POWER_REFRESH_MS = 1000;
 const ALERT_COOLDOWN_MS = 2000;
+const POWER_AUDIO_MILESTONES = [100, 200, 300, 400, 500, 600, 700] as const;
+type AudioCue = "countdown" | "go" | "threshold" | SprintBurst["kind"];
 const holdMessages = [
   "TIENI LA POTENZA!",
   "DAI TUTTO!",
@@ -226,6 +228,7 @@ export function App() {
     lastBurstRef = useRef(0),
     lastCoachRef = useRef(0),
     lastDropRef = useRef(0),
+    audioMilestonesRef = useRef(new Set<number>()),
     powerBandRef = useRef<"normal" | "red" | "extra">("normal"),
     burstId = useRef(0),
     lapsRef = useRef<Lap[]>([]),
@@ -237,7 +240,6 @@ export function App() {
     recordedEffectsRef = useRef<Partial<Record<RecordedEffect, AudioBuffer>>>({}),
     recordedEffectEndsAtRef = useRef(0),
     lastApplauseRef = useRef(0),
-    lastDropEffectRef = useRef(0),
     recordedEffectLoadsRef = useRef<Partial<Record<RecordedEffect, Promise<void>>>>({}),
     sessionActiveRef = useRef(false);
   pRef.current = provider;
@@ -324,32 +326,27 @@ export function App() {
   }
   function playRecordedEffect(audio: AudioContext, output: AudioNode, effect: RecordedEffect, when: number, volume: number) {
     const buffer = recordedEffectsRef.current[effect];
-    // Una sola reazione registrata per volta: applauso, botto e boo non si
-    // devono mai trasformare in una confusione sonora quando i watt oscillano.
-    if (!buffer || when < recordedEffectEndsAtRef.current) return false;
+    // Una sola reazione registrata per volta. Se due soglie arrivano vicine,
+    // la seconda aspetta la fine della prima invece di sovrapporsi o sparire.
+    if (!buffer) return false;
     const source = audio.createBufferSource();
     const gain = audio.createGain();
     const duration = Math.min(2, buffer.duration);
+    const startAt = Math.max(when, recordedEffectEndsAtRef.current);
     source.buffer = buffer;
-    gain.gain.setValueAtTime(volume, when);
+    gain.gain.setValueAtTime(volume, startAt);
     source.connect(gain).connect(output);
-    source.start(when);
+    source.start(startAt);
     // Le reazioni devono essere un colpo da videogame, non una colonna sonora:
     // anche gli applausi e i boo più lunghi vengono chiusi dopo due secondi.
-    source.stop(when + duration);
-    recordedEffectEndsAtRef.current = when + duration + .04;
+    source.stop(startAt + duration);
+    recordedEffectEndsAtRef.current = startAt + duration + .04;
     return true;
   }
   function nextApplause() {
     const variants: RecordedEffect[] = ["applause", "applauseThunder", "applauseStadium"];
     const next = variants[lastApplauseRef.current % variants.length];
     lastApplauseRef.current++;
-    return next;
-  }
-  function nextDropReaction() {
-    const variants: RecordedEffect[] = ["boo", "whistle"];
-    const next = variants[lastDropEffectRef.current % variants.length];
-    lastDropEffectRef.current++;
     return next;
   }
   function playRaceCountdown() {
@@ -363,8 +360,11 @@ export function App() {
       return true;
     } catch { return false; }
   }
-  async function playCue(kind: "countdown" | "go" | SprintBurst["kind"], countStep?: number, overdrive = false) {
+  async function playCue(kind: AudioCue, countStep?: number) {
     if (!settings.audio) return;
+    // Durante il Dyno i feedback testuali restano, ma i suoni sono riservati
+    // ai veri traguardi di potenza: niente applausi ripetuti ad ogni picco.
+    if (kind !== "countdown" && kind !== "go" && kind !== "threshold") return;
     try {
       const audio = await prepareAudio();
       if (!audio) return;
@@ -422,34 +422,21 @@ export function App() {
         const frequency = countStep === 3 ? 620 : countStep === 2 ? 760 : 920;
         tone(frequency, at, .11, .09, "square");
       } else if (kind === "go") {
-        // Via: un unico botto, non un miscuglio di campioni sovrapposti.
-        if (!playRecordedEffect(audio, output, "explosion", at, .72)) thunder(at);
-      } else if (kind === "hold") {
-        // Incitamento se tiene il colpo; al primo avvio senza file pronto,
-        // resta un breve tono sintetico leggibile.
-        if (!playRecordedEffect(audio, output, "crowdCheer", at, .3)) {
-          tone(155, at, .13, .09, "square", 330);
-          tone(190, at + .16, .13, .09, "square", 410);
-        }
-      } else if (kind === "drop") {
-        // Alterniamo boo e fischio: una sola reazione alla volta, mai entrambe.
-        if (!playRecordedEffect(audio, output, nextDropReaction(), at, .58)) {
-          tone(210, at, .16, .12, "sawtooth", 156);
-          tone(156, at + .13, .42, .13, "sawtooth", 58);
-        }
-      } else if (kind === "redline") {
-        // Oltre 400 W entra il botto: è il segnale inequivocabile della zona rossa.
-        if (!playRecordedEffect(audio, output, "explosion", at, overdrive ? .98 : .78)) thunder(at);
-      } else {
-        if (overdrive) {
-          if (!playRecordedEffect(audio, output, "explosion", at, .98)) thunder(at);
-        } else {
-          // Ogni picco ruota tra tre vere ovazioni, così non suona mai uguale.
-          if (!playRecordedEffect(audio, output, nextApplause(), at, .38)) {
-            crackle(at, .36, .27, 2100);
-            tone(430, at, .28, .2, "sawtooth", 1220);
-            tone(1240, at + .08, .22, .13, "sine", 2080);
+        // Il file countdown ha già il suo "via"; questo è il fallback per
+        // browser che l'hanno bloccato durante il primissimo tap.
+        tone(1420, at, .18, .14, "square", 1850);
+      } else if (kind === "threshold") {
+        const threshold = countStep ?? 100;
+        if (threshold < 300) {
+          // 100 W: applauso timido. 200 W: ovazione già più presente.
+          const volume = threshold === 100 ? .18 : .52;
+          if (!playRecordedEffect(audio, output, nextApplause(), at, volume)) {
+            tone(threshold === 100 ? 360 : 540, at, .18, volume * .28, "sine", threshold === 100 ? 480 : 760);
           }
+        } else {
+          // 300 W: botto breve. 400 W e oltre: super-esplosione crescente.
+          const volume = threshold === 300 ? .48 : threshold === 400 ? .92 : 1;
+          if (!playRecordedEffect(audio, output, "explosion", at, volume)) thunder(at);
         }
       }
     } catch { /* L'audio è un extra: la prova continua anche nei browser che lo bloccano. */ }
@@ -539,6 +526,7 @@ export function App() {
     lastCoachRef.current = 0;
     lastDropRef.current = 0;
     powerBandRef.current = "normal";
+    audioMilestonesRef.current.clear();
     setBurst(undefined);
     lapsRef.current = [];
     lapStartMs.current = 0;
@@ -597,6 +585,17 @@ export function App() {
             gradePercent: point ? point.grade * 100 : undefined,
             elevationMeters: point?.elevation,
           };
+        // Effetti sonori soltanto al primo raggiungimento di ogni soglia.
+        // Se un colpo di pedale salta più livelli insieme, vince il più alto:
+        // si sente la super-esplosione, mai una pila di suoni contemporanei.
+        if (challenge === "dyno") {
+          const justReached = POWER_AUDIO_MILESTONES.filter(
+            (threshold) => x.powerWatts >= threshold && !audioMilestonesRef.current.has(threshold),
+          );
+          justReached.forEach((threshold) => audioMilestonesRef.current.add(threshold));
+          const highestThreshold = justReached.at(-1);
+          if (highestThreshold) void playCue("threshold", highestThreshold);
+        }
         let feedback: Omit<SprintBurst, "id"> | undefined;
         const powerBand = x.powerWatts > 500 ? "extra" : x.powerWatts >= 400 ? "red" : "normal";
         if (x.powerWatts > peakRef.current) {
@@ -667,7 +666,7 @@ export function App() {
           lastCoachRef.current = x.timestamp;
           if (feedback.kind === "drop") lastDropRef.current = x.timestamp;
           setBurst({ ...feedback, id: burstId.current++ });
-          void playCue(feedback.kind, undefined, feedback.extra);
+          void playCue(feedback.kind);
         }
         sRef.current.push(y);
         if (track && dt > 0 && isVehicleGhost(ghostRef.current)) {
@@ -1280,7 +1279,7 @@ export function App() {
           >
             SAVE SETTINGS
           </button>
-          <button onClick={() => void playCue("go")}>TEST EFFETTI AUDIO</button>
+          <button onClick={() => void playCue("threshold", 400)}>TEST SUPER ESPLOSIONE 400 W</button>
           <button
             className="danger"
             onClick={async () => {
