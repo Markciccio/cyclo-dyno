@@ -280,6 +280,17 @@ export function App() {
       const audio = await prepareAudio();
       if (!audio) return;
       const at = audio.currentTime + .015;
+      // Catena "arcade": più presenza e impatto, ma il compressore protegge
+      // cuffie e piccoli speaker da picchi digitali sgradevoli.
+      const output = audio.createGain();
+      const compressor = audio.createDynamicsCompressor();
+      output.gain.setValueAtTime(1.45, at);
+      compressor.threshold.setValueAtTime(-19, at);
+      compressor.knee.setValueAtTime(18, at);
+      compressor.ratio.setValueAtTime(9, at);
+      compressor.attack.setValueAtTime(.004, at);
+      compressor.release.setValueAtTime(.22, at);
+      output.connect(compressor).connect(audio.destination);
       const crackle = (when: number, duration: number, volume: number, color: number) => {
         const buffer = audio.createBuffer(1, Math.max(1, Math.floor(audio.sampleRate * duration)), audio.sampleRate);
         const data = buffer.getChannelData(0);
@@ -292,7 +303,7 @@ export function App() {
         filter.frequency.setValueAtTime(color, when);
         gain.gain.setValueAtTime(volume, when);
         gain.gain.exponentialRampToValueAtTime(.0001, when + duration);
-        noise.connect(filter).connect(gain).connect(audio.destination);
+        noise.connect(filter).connect(gain).connect(output);
         noise.start(when);
       };
       const tone = (frequency: number, when: number, duration: number, volume: number, type: OscillatorType = "sine", endFrequency?: number) => {
@@ -304,33 +315,33 @@ export function App() {
         gain.gain.setValueAtTime(.0001, when);
         gain.gain.exponentialRampToValueAtTime(volume, when + .012);
         gain.gain.exponentialRampToValueAtTime(.0001, when + duration);
-        oscillator.connect(gain).connect(audio.destination);
+        oscillator.connect(gain).connect(output);
         oscillator.start(when);
         oscillator.stop(when + duration + .02);
       };
       const applause = (when: number) => {
         // Una serie irregolare di battiti di mani/crowd, non una voce registrata.
-        [0, .06, .12, .19, .28, .36, .47].forEach((offset, index) =>
-          crackle(when + offset, .045 + (index % 2) * .018, .035 + index * .004, 1250 + index * 90));
+        [0, .045, .09, .14, .2, .27, .35, .43, .52, .61].forEach((offset, index) =>
+          crackle(when + offset, .05 + (index % 2) * .022, .065 + index * .006, 1150 + index * 110));
       };
       const thunder = (when: number) => {
         // Basso + rumore lungo: effetto tuono/bomba per l'uscita oltre scala.
-        tone(64, when, .72, .19, "sawtooth", 27);
-        tone(38, when + .04, .62, .17, "sine", 22);
-        crackle(when, .82, .2, 210);
-        crackle(when + .08, .33, .11, 950);
-        crackle(when + .26, .18, .075, 2800);
+        tone(72, when, .9, .32, "sawtooth", 24);
+        tone(42, when + .03, .82, .28, "sine", 20);
+        tone(118, when + .07, .4, .16, "square", 38);
+        crackle(when, .96, .38, 180);
+        crackle(when + .06, .46, .22, 820);
+        crackle(when + .19, .3, .16, 2600);
       };
       if (kind === "countdown") {
         // Semaforo: tre bip netti e crescenti, senza ruggito di motore.
         const frequency = countStep === 3 ? 620 : countStep === 2 ? 760 : 920;
         tone(frequency, at, .11, .09, "square");
       } else if (kind === "go") {
-        // Boost di partenza: botto basso, scia di turbo e piccola scintilla.
-        crackle(at, .42, .15, 900);
-        tone(74, at, .34, .15, "sawtooth", 38);
-        tone(520, at + .05, .32, .075, "square", 1700);
-        crackle(at + .12, .12, .055, 3100);
+        // Partenza da gara: mini-tuono, turbo e scia luminosa.
+        thunder(at);
+        tone(580, at + .08, .42, .14, "square", 2100);
+        crackle(at + .14, .22, .14, 3400);
       } else if (kind === "hold") {
         // Motore in tiro più un piccolo applauso: premia chi tiene il colpo.
         tone(155, at, .13, .09, "square", 330);
@@ -348,9 +359,9 @@ export function App() {
           thunder(at);
         } else {
           // Sirena breve + scintilla: ingresso nella zona rossa.
-          tone(620, at, .13, .11, "square", 980);
-          tone(980, at + .15, .16, .1, "square", 1460);
-          crackle(at + .05, .16, .065, 2500);
+          tone(620, at, .13, .19, "square", 980);
+          tone(980, at + .15, .18, .18, "square", 1460);
+          crackle(at + .05, .2, .14, 2500);
         }
       } else {
         if (overdrive) {
@@ -358,9 +369,9 @@ export function App() {
           applause(at + .22);
         } else {
           // Picco istantaneo: esplosione brillante, più due scintille alte.
-          crackle(at, .3, .16, 2100);
-          tone(430, at, .22, .12, "sawtooth", 1220);
-          tone(1240, at + .08, .17, .075, "sine", 2080);
+          crackle(at, .36, .27, 2100);
+          tone(430, at, .28, .2, "sawtooth", 1220);
+          tone(1240, at + .08, .22, .13, "sine", 2080);
         }
       }
     } catch { /* L'audio è un extra: la prova continua anche nei browser che lo bloccano. */ }
