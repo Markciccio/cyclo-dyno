@@ -112,18 +112,18 @@ const dropMessages = [
   "NON LASCIARE WATT!",
 ];
 const riderAliases = [
-  "CAPITAN CATENA",
-  "DOTTOR WATT",
-  "TURBO GHIRO",
-  "MISS SCATTO",
-  "IL PEDALATORE",
-  "LADY RAPPORTI",
-  "BARONE DEL WATT",
-  "SUPER COPERTONE",
-  "FRECCIA DEL PARCO",
-  "IL CICLOIDE",
-  "BICI-BOOM",
-  "SIGNOR SELLA",
+  "CAPITAN CATENA LENTA",
+  "DOTTOR WATT SPRECATO",
+  "TURBO GHIRO ASSONNATO",
+  "MISS SCATTO TARDIVO",
+  "IL PEDALATORE MASCHERATO",
+  "LADY RAPPORTI CORTI",
+  "BARONE DEL WATT IMPROBABILE",
+  "SUPER COPERTONE SGONFIO",
+  "FRECCIA DEL PARCO PUBBLICO",
+  "IL CICLOIDE STORTO",
+  "BICI-BOOM SILENZIOSO",
+  "SIGNOR SELLA SCOMODA",
 ];
 const randomRiderAlias = () => riderAliases[Math.floor(Math.random() * riderAliases.length)];
 const numberedRiderAlias = () => `${randomRiderAlias()} #${String(Math.floor(Math.random() * 9000) + 1000)}`;
