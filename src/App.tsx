@@ -338,10 +338,11 @@ export function App() {
         crackle(at + .06, .08, .035, 1700);
         applause(at + .04);
       } else if (kind === "drop") {
-        // "Boo" sintetico, grave e breve: un richiamo giocoso a rilanciare.
-        tone(168, at, .23, .09, "sawtooth", 102);
-        tone(126, at + .08, .25, .075, "sawtooth", 82);
-        crackle(at + .04, .13, .035, 540);
+        // Trombone triste + boo: il calo netto deve sentirsi, in modo giocoso.
+        tone(210, at, .16, .12, "sawtooth", 156);
+        tone(156, at + .13, .42, .13, "sawtooth", 58);
+        tone(94, at + .21, .32, .095, "triangle", 46);
+        crackle(at + .12, .2, .05, 430);
       } else if (kind === "redline") {
         if (overdrive) {
           thunder(at);
@@ -959,7 +960,11 @@ export function App() {
     const rankingSource = result.dataSource === "demo"
       ? sessions.filter((session) => session.dataSource === "demo")
       : sessions.filter((session) => session.validSession);
-    const dynoRanking = isDynoResult ? rankFor([...rankingSource, result], "dyno") : [];
+    // Il salvataggio automatico può completarsi mentre il riepilogo è aperto:
+    // in quel caso il risultato è già in rankingSource e non va aggiunto due volte.
+    const dynoRanking = isDynoResult
+      ? rankFor([...rankingSource.filter((session) => session.id !== result.id), result], "dyno")
+      : [];
     const dynoPlace = dynoRanking.findIndex((session) => session.id === result.id) + 1;
     const rankingTitle = result.dataSource === "demo" ? "CLASSIFICA DEMO" : "CLASSIFICA UFFICIALE";
     return (
