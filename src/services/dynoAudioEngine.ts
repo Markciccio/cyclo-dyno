@@ -31,6 +31,8 @@ export class DynoAudioEngine {
   private buffers = new Map<SampleId, AudioBuffer>();
   private loading?: Promise<void>;
   private activeImpact?: ActiveImpact;
+  private overdriveImpact?: ActiveImpact;
+  private overdriveLatched = false;
   private enabled = true;
   private debug = false;
   private countdown?: HTMLAudioElement;
@@ -64,19 +66,27 @@ export class DynoAudioEngine {
     } catch { return false; }
   }
 
-  start() { this.controller.reset(); this.activeImpact = undefined; }
+  start() {
+    this.controller.reset();
+    this.fadeOverdrive();
+    this.activeImpact = undefined;
+    this.overdriveLatched = false;
+  }
 
   update(input: DynoAudioInput): DynoAudioState {
     const state = this.controller.update(input);
     if (!this.enabled || !this.context || !this.master) return state;
+    // A 500 W l'overdrive si aggancia; la soglia di uscita è volutamente più
+    // bassa per evitare "tagli" quando si oscilla vicini al limite.
+    if (input.powerWatts >= 500) this.startOverdrive();
+    else if (this.overdriveLatched && input.powerWatts < 400) this.fadeOverdrive();
     this.updateLayers(state);
     if (state.event) this.trigger(state.event);
     return state;
   }
 
   stop() {
-    // L'esplosione oltre 500 W non deve sparire entrando nei risultati: la
-    // lasciamo terminare naturalmente, al massimo dopo i suoi 3 secondi.
+    this.fadeOverdrive();
   }
 
   playCountdown() {
@@ -147,7 +157,7 @@ export class DynoAudioEngine {
     }
     // Il premio "grande" parte soltanto in overdrive. Ha la massima priorità
     // e viene lasciato completo: nessun fade quando la potenza ricade.
-    this.playSample("explosionImpact", 1, 3.024, 1_000, true);
+    this.startOverdrive();
   }
 
   private playSample(id: SampleId, volume: number, duration: number, priority: number, complete = false) {
@@ -186,6 +196,46 @@ export class DynoAudioEngine {
     });
   }
 
+  private startOverdrive() {
+    this.overdriveLatched = true;
+    if (this.overdriveImpact || !this.context || !this.master) return;
+    const buffer = this.buffers.get("explosionImpact");
+    if (!buffer) return;
+    // L'effetto resta in loop finché l'atleta conserva almeno 400 W. La sua
+    // priorità impedisce a record e arpeggi di mozzarlo a metà.
+    if (this.activeImpact) this.fadeImpact(.06);
+    const source = this.context.createBufferSource();
+    const gain = this.context.createGain();
+    source.buffer = buffer;
+    source.loop = true;
+    gain.gain.value = 1;
+    source.connect(gain).connect(this.master);
+    const active: ActiveImpact = { source, gain, priority: 1_000 };
+    this.activeImpact = active;
+    this.overdriveImpact = active;
+    source.onended = () => {
+      if (this.activeImpact === active) this.activeImpact = undefined;
+      if (this.overdriveImpact === active) this.overdriveImpact = undefined;
+    };
+    source.start();
+    this.log("overdrive ON · 500W raggiunti");
+  }
+
+  private fadeOverdrive() {
+    this.overdriveLatched = false;
+    const active = this.overdriveImpact;
+    if (!active || !this.context) return;
+    const at = this.context.currentTime;
+    try {
+      active.gain.gain.cancelScheduledValues(at);
+      active.gain.gain.setTargetAtTime(.0001, at, .16);
+      active.source.stop(at + .65);
+    } catch { /* La sorgente può essere già terminata. */ }
+    if (this.activeImpact === active) this.activeImpact = undefined;
+    this.overdriveImpact = undefined;
+    this.log("overdrive OFF · sotto 400W");
+  }
+
   private fadeImpact(seconds: number) {
     if (!this.activeImpact || !this.context) return;
     const { source, gain } = this.activeImpact;
@@ -195,6 +245,7 @@ export class DynoAudioEngine {
       gain.gain.setTargetAtTime(.0001, at, Math.max(.025, seconds / 4));
       source.stop(at + seconds);
     } catch { /* Già chiuso. */ }
+    if (this.overdriveImpact === this.activeImpact) this.overdriveImpact = undefined;
     this.activeImpact = undefined;
   }
 
