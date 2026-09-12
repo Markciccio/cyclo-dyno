@@ -16,4 +16,86 @@ export function unsupportedReason() {
   return 'Web Bluetooth non disponibile su questo browser: usa Chrome su Android.'
 }
 
-export class AssiomaBluetoothProvider implements PowerDataProvider{readonly source='assioma' as const;device?:BluetoothDevice;private c?:BluetoothRemoteGATTCharacteristic;private listener?:EventListener;connected=false;battery?:number;logs:string[]=[];status(){return this.connected?'ASSIOMA CONNECTED':'ASSIOMA NOT CONNECTED'}private log(x:string){this.logs=[`${new Date().toLocaleTimeString()} ${x}`,...this.logs].slice(0,500)}async connect(){if(!navigator.bluetooth)throw Error(unsupportedReason());this.device=await navigator.bluetooth.requestDevice({filters:[{services:[CYCLING_POWER_SERVICE]}],optionalServices:[BATTERY_SERVICE]});this.device.addEventListener('gattserverdisconnected',()=>{this.connected=false;this.log('Disconnected')});const server=await this.device.gatt!.connect(),service=await server.getPrimaryService(CYCLING_POWER_SERVICE);this.c=await service.getCharacteristic(CYCLING_POWER_MEASUREMENT);try{const b=await server.getPrimaryService(BATTERY_SERVICE);this.battery=(await(await b.getCharacteristic(BATTERY_LEVEL)).readValue()).getUint8(0)}catch{}await this.c.startNotifications();this.connected=true;this.log(`Connected: ${this.device.name??'unnamed'}`)}start(on:(s:PowerSample)=>void){if(!this.c)throw Error('Assioma non connesso');let prev:{rev:number;time:number}|undefined;this.listener=(e:Event)=>{const v=(e.target as BluetoothRemoteGATTCharacteristic).value!;try{const flags=v.getUint16(0,true),power=v.getInt16(2,true);let off=4+(flags&1?1:0)+(flags&2?2:0)+(flags&4?2:0)+(flags&8?4:0),cadence:number|undefined;if(flags&16&&v.byteLength>=off+4){const rev=v.getUint16(off,true),time=v.getUint16(off+2,true);if(prev){const dr=(rev-prev.rev+65536)%65536,dt=(time-prev.time+65536)%65536;if(dt)cadence=dr*60*1024/dt}prev={rev,time}}on({timestamp:performance.now(),powerWatts:power,cadenceRpm:cadence});this.log(`${power}W ${cadence?Math.round(cadence)+'rpm':''}`)}catch(e){this.log(`Packet error: ${e instanceof Error?e.message:'unknown'}`)}};this.c.addEventListener('characteristicvaluechanged',this.listener)}stop(){if(this.listener&&this.c)this.c.removeEventListener('characteristicvaluechanged',this.listener);this.listener=undefined}async disconnect(){this.stop();this.device?.gatt?.disconnect();this.connected=false}}
+function errorDetail(error: unknown) {
+  if (error instanceof Error) return `${error.name}: ${error.message}`;
+  return String(error || "errore senza dettaglio");
+}
+
+/** Il log arriva anche all'interfaccia prima che la connessione riesca. */
+export class AssiomaBluetoothProvider implements PowerDataProvider {
+  readonly source = "assioma" as const;
+  device?: BluetoothDevice;
+  private c?: BluetoothRemoteGATTCharacteristic;
+  private listener?: EventListener;
+  private onDiagnostic?: (message: string) => void;
+  connected = false;
+  battery?: number;
+  logs: string[] = [];
+
+  constructor(onDiagnostic?: (message: string) => void) { this.onDiagnostic = onDiagnostic; }
+  status() { return this.connected ? "ASSIOMA CONNECTED" : "ASSIOMA NOT CONNECTED"; }
+  private log(message: string) {
+    const entry = `${new Date().toLocaleTimeString()} ${message}`;
+    this.logs = [entry, ...this.logs].slice(0, 500);
+    this.onDiagnostic?.(entry);
+  }
+
+  async connect() {
+    if (!navigator.bluetooth) {
+      const reason = unsupportedReason();
+      this.log(`BLOCCATO: ${reason}`);
+      throw Error(reason);
+    }
+    try {
+      this.log("SCAN: apro la scelta del dispositivo Cycling Power");
+      this.device = await navigator.bluetooth.requestDevice({ filters: [{ services: [CYCLING_POWER_SERVICE] }], optionalServices: [BATTERY_SERVICE] });
+      this.log(`SELEZIONATO: ${this.device.name ?? "senza nome"}`);
+      this.device.addEventListener("gattserverdisconnected", () => { this.connected = false; this.log("DISCONNESSO: il pedale ha chiuso la connessione BLE"); });
+      this.log("GATT: collegamento al pedale");
+      const server = await this.device.gatt!.connect();
+      this.log("GATT: cerco il servizio Cycling Power");
+      const service = await server.getPrimaryService(CYCLING_POWER_SERVICE);
+      this.log("GATT: cerco la caratteristica Power Measurement");
+      this.c = await service.getCharacteristic(CYCLING_POWER_MEASUREMENT);
+      try {
+        const batteryService = await server.getPrimaryService(BATTERY_SERVICE);
+        this.battery = (await (await batteryService.getCharacteristic(BATTERY_LEVEL)).readValue()).getUint8(0);
+        this.log(`BATTERIA: ${this.battery}%`);
+      } catch (error) { this.log(`BATTERIA: non leggibile (${errorDetail(error)})`); }
+      this.log("NOTIFICHE: attivazione dati di potenza");
+      await this.c.startNotifications();
+      this.connected = true;
+      this.log("CONNESSO: Assioma pronto a inviare watt e cadenza");
+    } catch (error) {
+      this.log(`ERRORE: ${errorDetail(error)}`);
+      throw error;
+    }
+  }
+
+  start(onSample: (sample: PowerSample) => void) {
+    if (!this.c) throw Error("Assioma non connesso");
+    let previous: { rev: number; time: number } | undefined;
+    this.listener = (event: Event) => {
+      const value = (event.target as BluetoothRemoteGATTCharacteristic).value!;
+      try {
+        const flags = value.getUint16(0, true), power = value.getInt16(2, true);
+        const offset = 4 + (flags & 1 ? 1 : 0) + (flags & 2 ? 2 : 0) + (flags & 4 ? 2 : 0) + (flags & 8 ? 4 : 0);
+        let cadenceRpm: number | undefined;
+        if (flags & 16 && value.byteLength >= offset + 4) {
+          const rev = value.getUint16(offset, true), time = value.getUint16(offset + 2, true);
+          if (previous) {
+            const deltaRevs = (rev - previous.rev + 65536) % 65536, deltaTime = (time - previous.time + 65536) % 65536;
+            if (deltaTime) cadenceRpm = deltaRevs * 60 * 1024 / deltaTime;
+          }
+          previous = { rev, time };
+        }
+        onSample({ timestamp: performance.now(), powerWatts: power, cadenceRpm });
+        this.log(`${power} W ${cadenceRpm ? `${Math.round(cadenceRpm)} rpm` : ""}`);
+      } catch (error) { this.log(`ERRORE PACCHETTO: ${errorDetail(error)}`); }
+    };
+    this.c.addEventListener("characteristicvaluechanged", this.listener);
+  }
+
+  stop() { if (this.listener && this.c) this.c.removeEventListener("characteristicvaluechanged", this.listener); this.listener = undefined; }
+  async disconnect() { this.stop(); this.device?.gatt?.disconnect(); this.connected = false; this.log("DISCONNESSO MANUALMENTE"); }
+}

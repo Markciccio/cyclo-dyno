@@ -87,7 +87,9 @@ type SprintBurst = {
   hundred: boolean;
   extra?: boolean;
 };
-const POWER_REFRESH_MS = 1000;
+// Il wattaggio centrale deve restare leggibile ma seguire meglio gli sprint:
+// gli altri pannelli mantengono le rispettive frequenze di aggiornamento.
+const POWER_REFRESH_MS = 500;
 const ALERT_COOLDOWN_MS = 2000;
 const holdMessages = [
   "TIENI LA POTENZA!",
@@ -180,6 +182,8 @@ export function App() {
     [sessions, setSessions] = useState<DynoSession[]>([]),
     [count, setCount] = useState<number | "START!">(3),
     [notice, setNotice] = useState(""),
+    [bleDiagnostics, setBleDiagnostics] = useState<string[]>([]),
+    [bleLastError, setBleLastError] = useState(""),
     [wakeActive, setWakeActive] = useState(false),
     [installPrompt, setInstallPrompt] = useState<InstallPromptEvent>(),
     [riderWeight, setRiderWeight] = useState(""),
@@ -194,6 +198,8 @@ export function App() {
     sRef = useRef<SessionSample[]>([]),
     start = useRef(0),
     timer = useRef<number>(),
+    countdownTimer = useRef<number>(),
+    countdownStartTimer = useRef<number>(),
     ended = useRef(false),
     vehicleRef = useRef<VehicleProfile>("velomobile"),
     riderNameRef = useRef(""),
@@ -259,13 +265,29 @@ export function App() {
   const newSpeedPeak = !!live && samples.length > 1 && live.virtualSpeedKmh > Math.max(0, ...samples.slice(0, -1).map((x) => x.virtualSpeedKmh));
   const nav = (
     <nav>
-      <button onClick={() => setView("home")}>HOME</button>
+      <button onClick={goHome}>HOME</button>
       <button onClick={() => setView("leaderboard")}>CLASSIFICA</button>
       <button onClick={() => setView("debug")}>DEBUG</button>
       <button onClick={() => setView("settings")}>SETTINGS</button>
       <button className="install" onClick={installApp}>⇩ INSTALLA</button>
     </nav>
   );
+  function goHome() {
+    // Il ritorno alla Home deve fermare anche una partenza già programmata,
+    // altrimenti il test ripartirebbe dopo aver lasciato il countdown.
+    if (countdownTimer.current) clearInterval(countdownTimer.current);
+    if (countdownStartTimer.current) clearTimeout(countdownStartTimer.current);
+    countdownTimer.current = undefined;
+    countdownStartTimer.current = undefined;
+    if (timer.current) clearInterval(timer.current);
+    timer.current = undefined;
+    ended.current = true;
+    sessionActiveRef.current = false;
+    pRef.current.stop();
+    dynoAudioRef.current.stop();
+    void releaseWakeLock();
+    setView("home");
+  }
   function selectVehicle(next: VehicleProfile) {
     vehicleRef.current = next;
     setVehicle(next);
@@ -310,14 +332,25 @@ export function App() {
     setNotice(isiPhone ? "Su iPhone: tocca Condividi, poi ‘Aggiungi a Home’" : "Apri il menu del browser e scegli ‘Installa app’ o ‘Aggiungi a schermata Home’");
   }
   async function connect() {
+    const log = (message: string) => setBleDiagnostics((entries) => [
+      `${new Date().toLocaleTimeString()} ${message}`,
+      ...entries,
+    ].slice(0, 120));
+    setBleDiagnostics([]);
+    setBleLastError("");
+    log(`CONTROLLO: HTTPS=${window.isSecureContext ? "OK" : "NO"} · Web Bluetooth=${navigator.bluetooth ? "OK" : "MANCANTE"} · Bluefy=${/bluefy/i.test(navigator.userAgent) ? "RILEVATO" : "NON RILEVATO"}`);
     try {
-      const a = new AssiomaBluetoothProvider();
+      const a = new AssiomaBluetoothProvider(log);
       await a.connect();
       setProvider(a);
       setSource("assioma");
       setNotice("ASSIOMA CONNECTED");
     } catch (e) {
-      setNotice(e instanceof Error ? e.message : "Connessione non riuscita");
+      const detail = e instanceof Error ? `${e.name}: ${e.message}` : String(e || "Errore senza dettaglio");
+      log(`RISULTATO: ${detail}`);
+      setBleLastError(detail);
+      setNotice("CONNESSIONE ASSIOMA FALLITA — vedi DEBUG BLE");
+      setView("debug");
     }
   }
   async function begin() {
@@ -364,19 +397,23 @@ export function App() {
     setView("countdown");
     dynoAudioRef.current.playCountdownStep(3);
     let n = 3;
-    const i = window.setInterval(() => {
+    countdownTimer.current = window.setInterval(() => {
       n--;
       if (n > 0) {
         setCount(n);
         dynoAudioRef.current.playCountdownStep(n);
       }
       if (!n) {
-        clearInterval(i);
+        clearInterval(countdownTimer.current);
+        countdownTimer.current = undefined;
         // Il via deve essere una battuta a sé: sullo schermo resta START!
         // abbastanza a lungo da essere letto e il suo suono è distinto dai bip.
         setCount("START!");
         dynoAudioRef.current.playCountdownStart();
-        window.setTimeout(startSession, 700);
+        countdownStartTimer.current = window.setTimeout(() => {
+          countdownStartTimer.current = undefined;
+          startSession();
+        }, 700);
       }
     }, 1000);
   }
@@ -653,6 +690,7 @@ export function App() {
   if (view === "countdown")
     return (
       <main className="countdown">
+        <button className="session-home" onClick={goHome}>⌂ HOME</button>
         <div className={count === "START!" ? "countdown-start" : ""}>{count}</div>
       </main>
     );
@@ -706,6 +744,7 @@ export function App() {
         : undefined;
     return (
       <main className="dyno">
+        <button className="session-home" onClick={goHome}>⌂ HOME</button>
         <header>
           <span className="live">
             ● {riderNameRef.current} · {provider.status().toUpperCase()}
@@ -1156,6 +1195,14 @@ export function App() {
             <dd>{isA ? (provider.device?.name ?? "--") : "--"}</dd>
             <dt>CONNECTED</dt>
             <dd>{isA && provider.connected ? "YES" : "NO"}</dd>
+            <dt>HTTPS</dt>
+            <dd>{window.isSecureContext ? "OK" : "NO — apri la versione pubblicata"}</dd>
+            <dt>WEB BLUETOOTH</dt>
+            <dd>{navigator.bluetooth ? "DISPONIBILE" : "MANCANTE"}</dd>
+            <dt>BLUEFY</dt>
+            <dd>{/bluefy/i.test(navigator.userAgent) ? "RILEVATO" : "NON RILEVATO"}</dd>
+            <dt>ULTIMO ERRORE</dt>
+            <dd>{bleLastError || "--"}</dd>
             <dt>BATTERY</dt>
             <dd>
               {isA && provider.battery !== undefined
@@ -1168,10 +1215,14 @@ export function App() {
             <dd>{live?.powerWatts ?? 0} W</dd>
           </dl>
           <pre>
-            {isA
-              ? provider.logs.join("\n")
-              : "Connetti Assioma per vedere i log."}
+            {bleDiagnostics.length
+              ? bleDiagnostics.join("\n")
+              : "Premi RIPROVA ASSIOMA: qui compariranno ogni passaggio e l'errore preciso."}
           </pre>
+          <div className="actions">
+            <button className="primary" onClick={connect}>RIPROVA ASSIOMA</button>
+            <button onClick={() => { setBleDiagnostics([]); setBleLastError(""); }}>PULISCI DEBUG</button>
+          </div>
           {isA && (
             <button
               className="danger"
@@ -1189,6 +1240,7 @@ export function App() {
     return (
       <main className="display">
         <header>
+          <button onClick={goHome}>⌂ HOME</button>
           <span>{settings.eventName}</span>
           <b>HPV POWER CHALLENGE</b>
         </header>
