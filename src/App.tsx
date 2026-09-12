@@ -361,7 +361,8 @@ export function App() {
   }
   async function begin() {
     // Tutto l'audio viene sbloccato dal gesto Start: fondamentale su Safari e Android.
-    await dynoAudioRef.current.prepare(settings.audio);
+    // Non attendere: su Bluefy il resume deve restare nello stesso gesto Start.
+    void dynoAudioRef.current.prepare(settings.audio);
     const randomName = uniqueRiderAlias(sessions);
     const parsedWeight = Number(riderWeight.replace(",", "."));
     riderNameRef.current = name.trim() || randomName;
@@ -1172,7 +1173,7 @@ export function App() {
           >
             SAVE SETTINGS
           </button>
-          <button onClick={() => void dynoAudioRef.current.prepare(settings.audio).then(() => dynoAudioRef.current.test())}>
+          <button onClick={() => dynoAudioRef.current.testFromGesture(settings.audio)}>
             TEST AUDIO OVERDRIVE
           </button>
           <button

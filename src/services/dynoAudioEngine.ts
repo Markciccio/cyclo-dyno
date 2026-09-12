@@ -49,8 +49,11 @@ export class DynoAudioEngine {
     try {
       const context = this.context ?? new AudioContext();
       this.context = context;
-      if (context.state !== "running") await context.resume();
       this.ensureLayers(context);
+      // Bluefy/iOS autorizza l'audio soltanto se resume e il primo suono sono
+      // avviati direttamente dal tocco dell'utente, prima di qualsiasi await.
+      this.primeFromGesture(context);
+      if (context.state !== "running") await context.resume();
       if (!this.countdown) {
         this.countdown = new Audio(raceCountdownAudioUrl);
         this.countdown.preload = "auto";
@@ -140,6 +143,17 @@ export class DynoAudioEngine {
 
   test() { this.trigger({ kind: "threshold", threshold: 800, priority: 80 }); }
 
+  testFromGesture(enabled: boolean) {
+    // Non attendere prepare: il browser deve vedere anche il test nello stesso
+    // gesto che ha premuto il bottone. Usiamo toni sintetici, disponibili
+    // subito: gli effetti campionati potrebbero essere ancora in download.
+    void this.prepare(enabled);
+    if (!this.enabled) return;
+    this.playTone(784, .16, .12, "square");
+    window.setTimeout(() => this.playTone(1047, .2, .14, "square"), 150);
+    window.setTimeout(() => this.playTone(1568, .34, .16, "sine"), 330);
+  }
+
   dispose() {
     this.stop();
     this.fadeImpact(.08);
@@ -159,6 +173,19 @@ export class DynoAudioEngine {
     master.connect(compressor).connect(context.destination);
     this.master = master;
 
+  }
+
+  private primeFromGesture(context: AudioContext) {
+    if (!this.master) return;
+    const oscillator = context.createOscillator();
+    const gain = context.createGain();
+    const at = context.currentTime;
+    oscillator.frequency.value = 440;
+    // Segnale virtualmente inudibile, necessario per sbloccare Web Audio su iOS.
+    gain.gain.setValueAtTime(.0001, at);
+    oscillator.connect(gain).connect(this.master);
+    oscillator.start(at);
+    oscillator.stop(at + .02);
   }
 
   private updateLayers(state: DynoAudioState) {
