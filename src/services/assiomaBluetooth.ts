@@ -1,5 +1,7 @@
 import type {PowerDataProvider,PowerSample} from '../types'
 export const CYCLING_POWER_SERVICE=0x1818,CYCLING_POWER_MEASUREMENT=0x2a63,BATTERY_SERVICE=0x180f,BATTERY_LEVEL=0x2a19
+const CYCLING_POWER_SERVICE_UUID = "00001818-0000-1000-8000-00805f9b34fb";
+const BATTERY_SERVICE_UUID = "0000180f-0000-1000-8000-00805f9b34fb";
 export function parseCyclingPowerMeasurement(v:DataView){if(v.byteLength<4)throw Error('Invalid Cycling Power Measurement');return{powerWatts:v.getInt16(2,true)}}
 
 /**
@@ -53,7 +55,7 @@ export class AssiomaBluetoothProvider implements PowerDataProvider {
       this.log("SCAN: apro tutti i dispositivi BLE; scegli ASSIOMA sinistro/master");
       this.device = await navigator.bluetooth.requestDevice({
         acceptAllDevices: true,
-        optionalServices: [CYCLING_POWER_SERVICE, BATTERY_SERVICE],
+        optionalServices: [CYCLING_POWER_SERVICE_UUID, BATTERY_SERVICE_UUID],
       });
       this.log(`SELEZIONATO: ${this.device.name ?? "senza nome"}`);
       this.device.addEventListener("gattserverdisconnected", () => { this.connected = false; this.log("DISCONNESSO: il pedale ha chiuso la connessione BLE"); });

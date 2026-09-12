@@ -338,6 +338,12 @@ export function App() {
     ].slice(0, 120));
     setBleDiagnostics([]);
     setBleLastError("");
+    // Il Debug non deve scambiare l'ultimo campione DEMO per un dato Assioma:
+    // un nuovo tentativo parte sempre da valori vuoti.
+    sRef.current = [];
+    setSamples([]);
+    setDisplayPower(0);
+    setDisplaySpeed(0);
     log(`CONTROLLO: HTTPS=${window.isSecureContext ? "OK" : "NO"} · Web Bluetooth=${navigator.bluetooth ? "OK" : "MANCANTE"} · Bluefy=${/bluefy/i.test(navigator.userAgent) ? "RILEVATO" : "NON RILEVATO"}`);
     try {
       const a = new AssiomaBluetoothProvider(log);
@@ -1211,8 +1217,8 @@ export function App() {
             </dd>
             <dt>PACKETS RECEIVED</dt>
             <dd>{isA ? provider.logs.length : "0"}</dd>
-            <dt>LIVE POWER</dt>
-            <dd>{live?.powerWatts ?? 0} W</dd>
+            <dt>POWER DAL PEDALE</dt>
+            <dd>{isA ? `${live?.powerWatts ?? 0} W` : "-- (Assioma non connesso)"}</dd>
           </dl>
           <pre>
             {bleDiagnostics.length
