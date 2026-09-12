@@ -364,6 +364,9 @@ export function App() {
     // Tutto l'audio viene sbloccato dal gesto Start: fondamentale su Safari e Android.
     // Non attendere: su Bluefy il resume deve restare nello stesso gesto Start.
     void dynoAudioRef.current.prepare(settings.audio);
+    // Avviato nello stesso gesto Start, il countdown nativo è il fallback
+    // affidabile per Bluefy/iPad mentre i toni Web Audio restano sincronizzati.
+    dynoAudioRef.current.playCountdown();
     const randomName = uniqueRiderAlias(sessions);
     const parsedWeight = Number(riderWeight.replace(",", "."));
     riderNameRef.current = name.trim() || randomName;

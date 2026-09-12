@@ -102,7 +102,7 @@ export class DynoAudioEngine {
   }
 
   playCountdown() {
-    if (!this.enabled || !this.countdown || this.countdown.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) return false;
+    if (!this.enabled || !this.countdown) return false;
     try {
       this.countdown.pause();
       this.countdown.currentTime = 0;
