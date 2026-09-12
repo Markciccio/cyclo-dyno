@@ -47,8 +47,14 @@ export class AssiomaBluetoothProvider implements PowerDataProvider {
       throw Error(reason);
     }
     try {
-      this.log("SCAN: apro la scelta del dispositivo Cycling Power");
-      this.device = await navigator.bluetooth.requestDevice({ filters: [{ services: [CYCLING_POWER_SERVICE] }], optionalServices: [BATTERY_SERVICE] });
+      // Bluefy può non esporre nel selettore i servizi BLE pubblicizzati da
+      // alcuni sensori ciclistici: mostriamo quindi tutti i BLE vicini e
+      // chiediamo esplicitamente accesso ai due servizi che useremo dopo.
+      this.log("SCAN: apro tutti i dispositivi BLE; scegli ASSIOMA sinistro/master");
+      this.device = await navigator.bluetooth.requestDevice({
+        acceptAllDevices: true,
+        optionalServices: [CYCLING_POWER_SERVICE, BATTERY_SERVICE],
+      });
       this.log(`SELEZIONATO: ${this.device.name ?? "senza nome"}`);
       this.device.addEventListener("gattserverdisconnected", () => { this.connected = false; this.log("DISCONNESSO: il pedale ha chiuso la connessione BLE"); });
       this.log("GATT: collegamento al pedale");
