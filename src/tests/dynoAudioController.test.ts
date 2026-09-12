@@ -32,14 +32,14 @@ describe("DynoAudioController", () => {
 
   it("dà priorità al record personale rispetto alla soglia", () => {
     const controller = new DynoAudioController();
-    controller.update({ ...sample(0, 0), personalPeak: 400 });
-    expect(controller.update({ ...sample(460, 1000, 460), personalPeak: 400 }).event).toMatchObject({ kind: "record" });
+    controller.update({ ...sample(0, 0), personalPeak: 300 });
+    expect(controller.update({ ...sample(360, 1000, 360), personalPeak: 300 }).event).toMatchObject({ kind: "record" });
   });
 
-  it("dà priorità al traguardo overdrive oltre 500 W", () => {
+  it("dà priorità al traguardo overdrive da 400 W", () => {
     const controller = new DynoAudioController();
-    controller.update({ ...sample(0, 0), personalPeak: 500 });
-    expect(controller.update({ ...sample(620, 1000, 620), personalPeak: 500 }).event).toMatchObject({ kind: "threshold", threshold: 500 });
+    controller.update({ ...sample(0, 0), personalPeak: 400 });
+    expect(controller.update({ ...sample(460, 1000, 460), personalPeak: 400 }).event).toMatchObject({ kind: "threshold", threshold: 400 });
   });
 
   it("segnala un miglioramento rilevante sui 5 secondi una sola volta", () => {

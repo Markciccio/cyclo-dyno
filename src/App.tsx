@@ -69,8 +69,9 @@ const deltaLabel = (seconds: number | undefined) => {
   const rounded = Math.round(seconds);
   return `${rounded > 0 ? "+" : ""}${rounded}s`;
 };
+const OVERDRIVE_WATTS = 400;
 const powerLevel = (w: number) =>
-  w > 500
+  w >= OVERDRIVE_WATTS
     ? "power-extra"
     : w >= 400
     ? "power-red"
@@ -465,7 +466,7 @@ export function App() {
           };
         let feedback: Omit<SprintBurst, "id"> | undefined;
         let coachCue: "drop" | "hold" | "redline" | undefined;
-        const powerBand = x.powerWatts > 500 ? "extra" : x.powerWatts >= 400 ? "red" : "normal";
+        const powerBand = x.powerWatts >= OVERDRIVE_WATTS ? "extra" : "normal";
         if (x.powerWatts > peakRef.current) {
           const hundred = Math.floor(x.powerWatts / 100) > Math.floor(peakRef.current / 100);
           peakRef.current = x.powerWatts;
@@ -478,7 +479,7 @@ export function App() {
               message: hundred ? "POTENZA FUORI SCALA!" : "CONTINUA COSÌ!",
               kind: "peak",
               hundred,
-              extra: x.powerWatts > 500,
+              extra: x.powerWatts >= OVERDRIVE_WATTS,
             };
           }
         }
@@ -486,13 +487,13 @@ export function App() {
         // sprona a tenere lo sforzo, senza aggiungere avvisi Top 5 affollati.
         if (challenge === "dyno") {
           // Anche senza un nuovo record, l'ingresso nelle fasce calde merita
-          // un segnale netto: rosso a 400 W, overdrive oltre 500 W.
-          // L'ingresso oltre 400 W ha priorità perfino sul cartello del nuovo
-          // picco: così il botto di zona rossa arriva sempre al momento giusto.
+          // un segnale netto: overdrive da 400 W.
+          // L'ingresso nella zona esplosiva ha priorità perfino sul cartello
+          // del nuovo picco: così il botto arriva sempre al momento giusto.
           if (powerBand !== "normal" && powerBand !== powerBandRef.current) {
             feedback = {
-              title: powerBand === "extra" ? "OVERDRIVE!" : "ZONA ROSSA!",
-              message: powerBand === "extra" ? "OLTRE 500 W · OVERDRIVE!" : "400 W RAGGIUNTI · SPINGI ANCORA!",
+              title: "OVERDRIVE!",
+              message: "400 W RAGGIUNTI · ZONA ESPLOSIVA!",
               kind: "redline",
               hundred: powerBand === "extra",
               extra: powerBand === "extra",
@@ -509,8 +510,8 @@ export function App() {
               title: holdMessages[burstId.current % holdMessages.length],
               message: "TOP 3 SECONDI IN CORSO",
               kind: "hold",
-              hundred: current3 > 500,
-              extra: current3 > 500,
+              hundred: current3 >= OVERDRIVE_WATTS,
+              extra: current3 >= OVERDRIVE_WATTS,
             };
           }
           // Dopo una fase attiva, il calo va intercettato anche nei demo più
@@ -818,7 +819,7 @@ export function App() {
                 {displayPower}<em>W</em>
               </strong>
             </div>
-            <Gauge power={displayPower} range={activeChallenge.powerRangeWatts} overdriveAt={500} />
+            <Gauge power={displayPower} range={activeChallenge.powerRangeWatts} overdriveAt={OVERDRIVE_WATTS} />
             <div className="sprint-secondary">
               <div className="sprint-peak">
                 <label>PICCO</label>

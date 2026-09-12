@@ -107,7 +107,7 @@ export class DynoAudioController {
       candidates.push({
         kind: "threshold",
         threshold: highestThreshold,
-        priority: highestThreshold >= 500 ? 200 + config.priority : config.priority,
+        priority: highestThreshold >= 400 ? 200 + config.priority : config.priority,
       });
     }
 

@@ -23,6 +23,8 @@ const sampleUrls: Record<SampleId, string> = {
 
 type ActiveImpact = { source: AudioBufferSourceNode; gain: GainNode; priority: number };
 const OVERDRIVE_RETRIGGER_MS = 6000;
+const OVERDRIVE_WATTS = 400;
+const OVERDRIVE_RELEASE_WATTS = 320;
 
 /** Motore Web Audio centralizzato: layer continui + un solo evento importante alla volta. */
 export class DynoAudioEngine {
@@ -86,10 +88,10 @@ export class DynoAudioEngine {
   update(input: DynoAudioInput): DynoAudioState {
     const state = this.controller.update(input);
     if (!this.enabled || !this.context || !this.master) return state;
-    // A 500 W l'overdrive si aggancia; la soglia di uscita è volutamente più
+    // A 400 W l'overdrive si aggancia; la soglia di uscita è volutamente più
     // bassa per evitare "tagli" quando si oscilla vicini al limite.
-    if (input.powerWatts >= 500) this.startOverdrive();
-    else if (this.overdriveLatched && input.powerWatts < 400) this.fadeOverdrive();
+    if (input.powerWatts >= OVERDRIVE_WATTS) this.startOverdrive();
+    else if (this.overdriveLatched && input.powerWatts < OVERDRIVE_RELEASE_WATTS) this.fadeOverdrive();
     this.updateLayers(state);
     if (state.event) this.trigger(state.event);
     return state;
@@ -232,10 +234,10 @@ export class DynoAudioEngine {
     }
     const threshold = event.threshold ?? 100;
     if (event.kind === "peak") {
-      if (threshold < 500) this.playArcadeCue(threshold);
+      if (threshold < OVERDRIVE_WATTS) this.playArcadeCue(threshold);
       return;
     }
-    if (threshold < 500) {
+    if (threshold < OVERDRIVE_WATTS) {
       this.playArcadeCue(threshold);
       return;
     }
@@ -284,7 +286,7 @@ export class DynoAudioEngine {
     this.overdriveLatched = true;
     if (this.overdriveImpact || !this.context || !this.master) return;
     const now = this.context.currentTime * 1000;
-    // Se l'atleta ondeggia attorno a 500 W non deve innescare una raffica di
+    // Se l'atleta ondeggia attorno a 400 W non deve innescare una raffica di
     // esplosioni: il loop già avviato resta continuo, e dopo l'uscita ne può
     // partire uno nuovo soltanto dopo una pausa realmente percepibile.
     if (now - this.lastOverdriveStartedAt < OVERDRIVE_RETRIGGER_MS) {
@@ -311,7 +313,7 @@ export class DynoAudioEngine {
       if (this.overdriveImpact === active) this.overdriveImpact = undefined;
     };
     source.start();
-    this.log("overdrive ON · 500W raggiunti");
+    this.log("overdrive ON · 400W raggiunti");
   }
 
   private fadeOverdrive() {
@@ -326,7 +328,7 @@ export class DynoAudioEngine {
     } catch { /* La sorgente può essere già terminata. */ }
     if (this.activeImpact === active) this.activeImpact = undefined;
     this.overdriveImpact = undefined;
-    this.log("overdrive OFF · sotto 400W");
+    this.log("overdrive OFF · sotto 320W");
   }
 
   private fadeImpact(seconds: number) {
