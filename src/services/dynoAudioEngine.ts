@@ -22,6 +22,7 @@ const sampleUrls: Record<SampleId, string> = {
 };
 
 type ActiveImpact = { source: AudioBufferSourceNode; gain: GainNode; priority: number };
+const OVERDRIVE_RETRIGGER_MS = 6000;
 
 /** Motore Web Audio centralizzato: layer continui + un solo evento importante alla volta. */
 export class DynoAudioEngine {
@@ -33,6 +34,8 @@ export class DynoAudioEngine {
   private activeImpact?: ActiveImpact;
   private overdriveImpact?: ActiveImpact;
   private overdriveLatched = false;
+  private lastOverdriveStartedAt = -Infinity;
+  private coachCueUntil = -Infinity;
   private enabled = true;
   private debug = false;
   private countdown?: HTMLAudioElement;
@@ -71,6 +74,8 @@ export class DynoAudioEngine {
     this.fadeOverdrive();
     this.activeImpact = undefined;
     this.overdriveLatched = false;
+    this.lastOverdriveStartedAt = -Infinity;
+    this.coachCueUntil = -Infinity;
   }
 
   update(input: DynoAudioInput): DynoAudioState {
@@ -101,13 +106,36 @@ export class DynoAudioEngine {
 
   playCountdownStep(step: number) {
     if (!this.context || !this.enabled) return;
-    // Classica sequenza di partenza: due bip brevi, poi un lungo "via".
-    // La seconda armonica dà presenza anche sui piccoli altoparlanti del telefono.
-    const isGoSignal = step === 1;
-    const duration = isGoSignal ? .56 : .12;
-    const fundamental = isGoSignal ? 980 : 720;
-    this.playTone(fundamental, duration, isGoSignal ? .15 : .12, "square");
-    this.playTone(fundamental * 1.5, Math.max(.08, duration - .03), isGoSignal ? .045 : .035, "sine");
+    // Tre bip brevi, con intonazione crescente: 3, 2, 1.
+    const fundamental = 620 + (3 - step) * 70;
+    this.playTone(fundamental, .13, .12, "square");
+    this.playTone(fundamental * 1.5, .09, .035, "sine");
+  }
+
+  playCountdownStart() {
+    if (!this.context || !this.enabled) return;
+    // Il via è un segnale separato e più ampio dei tre bip: chiaro anche su
+    // altoparlanti piccoli, senza dipendere dal caricamento di un file audio.
+    this.playTone(1040, .48, .17, "square");
+    this.playTone(1560, .38, .055, "sine");
+  }
+
+  /** Segnale per i cartelli di coaching. Non compete mai con un effetto di
+   * soglia/overdrive: se c'è già audio, il messaggio resta visivo e tace. */
+  playCoachCue(kind: "drop" | "hold" | "redline") {
+    if (!this.context || !this.enabled || this.activeImpact) return false;
+    const now = this.context.currentTime;
+    if (now < this.coachCueUntil) return false;
+    const notes = kind === "drop"
+      ? [392, 311, 233] // dissonante e discendente: bisogna rilanciare
+      : kind === "hold"
+        ? [659, 784] // breve spinta in avanti: tieni il ritmo
+        : [784, 1047]; // ingresso in zona rossa
+    this.coachCueUntil = now + notes.length * .105 + .08;
+    notes.forEach((note, index) => {
+      window.setTimeout(() => this.playTone(note, .105, .07, kind === "drop" ? "sawtooth" : "square"), index * 105);
+    });
+    return true;
   }
 
   test() { this.trigger({ kind: "threshold", threshold: 800, priority: 80 }); }
@@ -209,6 +237,14 @@ export class DynoAudioEngine {
   private startOverdrive() {
     this.overdriveLatched = true;
     if (this.overdriveImpact || !this.context || !this.master) return;
+    const now = this.context.currentTime * 1000;
+    // Se l'atleta ondeggia attorno a 500 W non deve innescare una raffica di
+    // esplosioni: il loop già avviato resta continuo, e dopo l'uscita ne può
+    // partire uno nuovo soltanto dopo una pausa realmente percepibile.
+    if (now - this.lastOverdriveStartedAt < OVERDRIVE_RETRIGGER_MS) {
+      this.log("overdrive bloccato dal cooldown");
+      return;
+    }
     const buffer = this.buffers.get("explosionImpact");
     if (!buffer) return;
     // L'effetto resta in loop finché l'atleta conserva almeno 400 W. La sua
@@ -223,6 +259,7 @@ export class DynoAudioEngine {
     const active: ActiveImpact = { source, gain, priority: 1_000 };
     this.activeImpact = active;
     this.overdriveImpact = active;
+    this.lastOverdriveStartedAt = now;
     source.onended = () => {
       if (this.activeImpact === active) this.activeImpact = undefined;
       if (this.overdriveImpact === active) this.overdriveImpact = undefined;

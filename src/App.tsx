@@ -178,7 +178,7 @@ export function App() {
     [clock, setClock] = useState(0),
     [result, setResult] = useState<DynoSession>(),
     [sessions, setSessions] = useState<DynoSession[]>([]),
-    [count, setCount] = useState(3),
+    [count, setCount] = useState<number | "START!">(3),
     [notice, setNotice] = useState(""),
     [wakeActive, setWakeActive] = useState(false),
     [installPrompt, setInstallPrompt] = useState<InstallPromptEvent>(),
@@ -366,13 +366,17 @@ export function App() {
     let n = 3;
     const i = window.setInterval(() => {
       n--;
-      setCount(n);
-      // Segnale di gara: bip, bip, biiiiip. Il "via" coincide con la fine
-      // del terzo segnale, senza un quarto suono ridondante.
-      if (n > 0) dynoAudioRef.current.playCountdownStep(n);
+      if (n > 0) {
+        setCount(n);
+        dynoAudioRef.current.playCountdownStep(n);
+      }
       if (!n) {
         clearInterval(i);
-        startSession();
+        // Il via deve essere una battuta a sé: sullo schermo resta START!
+        // abbastanza a lungo da essere letto e il suo suono è distinto dai bip.
+        setCount("START!");
+        dynoAudioRef.current.playCountdownStart();
+        window.setTimeout(startSession, 700);
       }
     }, 1000);
   }
@@ -416,6 +420,7 @@ export function App() {
             elevationMeters: point?.elevation,
           };
         let feedback: Omit<SprintBurst, "id"> | undefined;
+        let coachCue: "drop" | "hold" | "redline" | undefined;
         const powerBand = x.powerWatts > 500 ? "extra" : x.powerWatts >= 400 ? "red" : "normal";
         if (x.powerWatts > peakRef.current) {
           const hundred = Math.floor(x.powerWatts / 100) > Math.floor(peakRef.current / 100);
@@ -484,13 +489,16 @@ export function App() {
         if (feedback && x.timestamp - lastCoachRef.current >= ALERT_COOLDOWN_MS) {
           lastCoachRef.current = x.timestamp;
           if (feedback.kind === "drop") lastDropRef.current = x.timestamp;
+          // Picchi e record hanno già il loro jingle. Tutti i messaggi di
+          // coaching ricevono invece un richiamo dedicato, dopo il controller.
+          if (feedback.kind !== "peak") coachCue = feedback.kind;
           setBurst({ ...feedback, id: burstId.current++ });
         }
         if (challenge === "dyno") {
           const nextSamples = [...sRef.current, y];
           // Il controller sceglie al massimo un evento importante: nessuna
           // esplosione a intervallo fisso e nessuna sovrapposizione casuale.
-          dynoAudioRef.current.update({
+          const audioState = dynoAudioRef.current.update({
             powerWatts: x.powerWatts,
             timestamp: x.timestamp,
             peakPower: peakRef.current,
@@ -498,6 +506,9 @@ export function App() {
             personalPeak: personalPeakRef.current,
             personalBest5s: personalBest5Ref.current,
           });
+          // Priorità assoluta a record, soglie ed overdrive: il coach suona
+          // soltanto quando non c'è già un effetto che copre lo stesso istante.
+          if (coachCue && !audioState.event) dynoAudioRef.current.playCoachCue(coachCue);
         }
         sRef.current.push(y);
         if (track && dt > 0 && isVehicleGhost(ghostRef.current)) {
@@ -642,7 +653,7 @@ export function App() {
   if (view === "countdown")
     return (
       <main className="countdown">
-        <div>{count || "GO!"}</div>
+        <div className={count === "START!" ? "countdown-start" : ""}>{count}</div>
       </main>
     );
   if (view === "dyno") {

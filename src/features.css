@@ -1092,6 +1092,8 @@
 /* Il semaforo non deve seguire il layout della pagina: occupa sempre il display. */
 main.countdown{position:fixed;inset:0;z-index:1000;width:100vw;max-width:none;min-height:100dvh;margin:0;padding:0;display:grid;place-items:center;background:radial-gradient(circle at center,#efff61 0 13%,#d8ff22 42%,#a5c700 100%);}
 main.countdown>div{margin:0;line-height:.72;text-align:center;transform:translateY(-1vh);}
+main.countdown>div.countdown-start{font-size:clamp(4.8rem,21vw,15rem);letter-spacing:.035em;line-height:.8;text-shadow:0 0 12px #fff,0 0 32px #fff35b,0 0 80px #ff8a00;animation:countdownStart .7s ease-out both;}
+@keyframes countdownStart{from{opacity:0;transform:translateY(-1vh) scale(.72)}55%{opacity:1;transform:translateY(-1vh) scale(1.08)}to{opacity:1;transform:translateY(-1vh) scale(1)}}
 
 /* =========================================================================
    TABLET E SCHERMO INTERO
