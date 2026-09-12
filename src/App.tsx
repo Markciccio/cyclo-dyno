@@ -944,18 +944,14 @@ export function App() {
   }
   if (view === "result" && result) {
     const isDynoResult = (result.challenge ?? "dyno") === "dyno";
-    // Il risultato corrente non è ancora salvato: lo inseriamo provvisoriamente
-    // nel gruppo giusto per poter mostrare subito posizione e podio.
-    const rankingSource = result.dataSource === "demo"
-      ? sessions.filter((session) => session.dataSource === "demo")
-      : sessions.filter((session) => session.validSession);
-    // Il salvataggio automatico può completarsi mentre il riepilogo è aperto:
-    // in quel caso il risultato è già in rankingSource e non va aggiunto due volte.
+    // L'anteprima deve avere lo stesso identico perimetro della CLASSIFICA:
+    // nessun filtro per fonte o validità. Se il salvataggio automatico è già
+    // terminato sostituiamo la riga con il risultato corrente, senza duplicarlo.
     const dynoRanking = isDynoResult
-      ? rankFor([...rankingSource.filter((session) => session.id !== result.id), result], "dyno")
+      ? rankFor([...sessions.filter((session) => session.id !== result.id), result], "dyno")
       : [];
     const dynoPlace = dynoRanking.findIndex((session) => session.id === result.id) + 1;
-    const rankingTitle = result.dataSource === "demo" ? "CLASSIFICA DEMO" : "CLASSIFICA UFFICIALE";
+    const rankingTitle = "CLASSIFICA COMPLETA";
     return (
       <main>
         {nav}
