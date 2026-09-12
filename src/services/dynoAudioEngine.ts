@@ -39,6 +39,7 @@ export class DynoAudioEngine {
   private enabled = true;
   private debug = false;
   private countdown?: HTMLAudioElement;
+  private mediaStatus = "non ancora testato";
 
   setDebug(enabled: boolean) { this.debug = enabled; }
   private log(message: string) { if (this.debug) console.info(`[AUDIO] ${message}`); }
@@ -50,16 +51,17 @@ export class DynoAudioEngine {
       const context = this.context ?? new AudioContext();
       this.context = context;
       this.ensureLayers(context);
-      // Bluefy/iOS autorizza l'audio soltanto se resume e il primo suono sono
-      // avviati direttamente dal tocco dell'utente, prima di qualsiasi await.
-      this.primeFromGesture(context);
-      if (context.state !== "running") await context.resume();
+      // Creare anche l'elemento media prima dell'await conserva il gesto su iOS.
       if (!this.countdown) {
         this.countdown = new Audio(raceCountdownAudioUrl);
         this.countdown.preload = "auto";
         this.countdown.volume = .88;
         this.countdown.load();
       }
+      // Bluefy/iOS autorizza l'audio soltanto se resume e il primo suono sono
+      // avviati direttamente dal tocco dell'utente, prima di qualsiasi await.
+      this.primeFromGesture(context);
+      if (context.state !== "running") await context.resume();
       if (!this.loading) {
         this.loading = Promise.all(Object.entries(sampleUrls).map(async ([id, url]) => {
           const response = await fetch(url);
@@ -143,12 +145,29 @@ export class DynoAudioEngine {
 
   test() { this.trigger({ kind: "threshold", threshold: 800, priority: 80 }); }
 
+  audioStatus() {
+    const context = this.context?.state ?? "non inizializzato";
+    return `Web Audio: ${context}; media: ${this.mediaStatus}`;
+  }
+
   testFromGesture(enabled: boolean) {
     // Non attendere prepare: il browser deve vedere anche il test nello stesso
     // gesto che ha premuto il bottone. Usiamo toni sintetici, disponibili
     // subito: gli effetti campionati potrebbero essere ancora in download.
     void this.prepare(enabled);
     if (!this.enabled) return;
+    // Fallback nativo: Bluefy può consentire HTMLMedia anche quando sospende
+    // Web Audio. La richiesta play parte nel gesto del bottone.
+    if (this.countdown) {
+      try {
+        this.countdown.pause();
+        this.countdown.currentTime = 0;
+        this.mediaStatus = "richiesta riproduzione";
+        void this.countdown.play()
+          .then(() => { this.mediaStatus = "in riproduzione"; })
+          .catch((error) => { this.mediaStatus = `bloccato (${error.name || "errore"})`; });
+      } catch { this.mediaStatus = "errore media"; }
+    }
     this.playTone(784, .16, .12, "square");
     window.setTimeout(() => this.playTone(1047, .2, .14, "square"), 150);
     window.setTimeout(() => this.playTone(1568, .34, .16, "sine"), 330);

@@ -1173,7 +1173,10 @@ export function App() {
           >
             SAVE SETTINGS
           </button>
-          <button onClick={() => dynoAudioRef.current.testFromGesture(settings.audio)}>
+          <button onClick={() => {
+            dynoAudioRef.current.testFromGesture(settings.audio);
+            window.setTimeout(() => setNotice(dynoAudioRef.current.audioStatus()), 600);
+          }}>
             TEST AUDIO OVERDRIVE
           </button>
           <button
