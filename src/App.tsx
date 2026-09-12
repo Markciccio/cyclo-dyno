@@ -691,8 +691,8 @@ export function App() {
       () => rankFor(sessions.filter((x) => x.validSession), challenge),
       [sessions, challenge],
     ),
-    leaderboardSessions = useMemo(
-      () => rankFor(sessions.filter((x) => x.validSession || x.dataSource === "demo"), challenge),
+  leaderboardSessions = useMemo(
+      () => rankFor(sessions, challenge),
       [sessions, challenge],
     );
   if (view === "countdown")
@@ -1063,6 +1063,7 @@ export function App() {
           <p className="sub">
             {challenge === "dyno" ? "ORDINATA PER PICCO POTENZA" : "ORDINATA PER TEMPO SUL PERCORSO"} · DEMO E SESSIONI REALI
           </p>
+          <p className="sub">{leaderboardSessions.length} RISULTATI SALVATI · VISUALIZZATI TUTTI</p>
           <div className="challenge-tabs">
             {(Object.keys(challenges) as ChallengeId[]).map((id) => (
               <button key={id} className={challenge === id ? "chosen" : ""} onClick={() => setChallenge(id)}>

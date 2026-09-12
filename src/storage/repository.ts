@@ -22,35 +22,17 @@ function tx<A>(store: string, mode: IDBTransactionMode, run: (s: IDBObjectStore)
   }));
 }
 
-/** Un doppio click, o un vecchio service worker che ritenta il salvataggio,
- * non deve creare due righe gemelle in classifica. */
-function isImmediateDuplicate(a: DynoSession, b: DynoSession) {
-  return (
-    a.participantName.trim().toLocaleUpperCase() === b.participantName.trim().toLocaleUpperCase() &&
-    (a.challenge ?? "dyno") === (b.challenge ?? "dyno") &&
-    a.vehicle === b.vehicle &&
-    a.dataSource === b.dataSource &&
-    Math.round(a.peakPower) === Math.round(b.peakPower) &&
-    Math.round((a.best5s ?? 0) * 10) === Math.round((b.best5s ?? 0) * 10) &&
-    Math.abs(a.timestamp - b.timestamp) < 15_000
-  );
-}
-
 async function saveUnique(session: DynoSession) {
   const db = await open();
   return new Promise<void>((ok, no) => {
     const transaction = db.transaction(S, "readwrite");
     const store = transaction.objectStore(S);
-    const existing = store.getAll();
     transaction.oncomplete = () => ok();
     transaction.onerror = () => no(transaction.error);
     transaction.onabort = () => no(transaction.error);
-    existing.onerror = () => no(existing.error);
-    existing.onsuccess = () => {
-      if (!(existing.result as DynoSession[]).some((saved) => isImmediateDuplicate(saved, session))) {
-        store.put(session);
-      }
-    };
+    // Ogni prova ha un id proprio: un secondo salvataggio dello stesso risultato
+    // aggiorna quella riga, mentre ogni nuovo sprint resta sempre nell'archivio.
+    store.put(session);
   });
 }
 
