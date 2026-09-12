@@ -1276,10 +1276,12 @@ export function App() {
           <label className="field">
             NOME <small className="nickname-suggestion">facoltativo · suggerito: <button type="button" onClick={() => setName(suggestedAlias)}>{suggestedAlias}</button></small>
             <input
-              autoFocus
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder={suggestedAlias}
+              autoComplete="off"
+              spellCheck={false}
+              enterKeyHint="done"
             />
           </label>
           <label className="field">
